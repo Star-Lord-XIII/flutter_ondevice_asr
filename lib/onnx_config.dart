@@ -67,6 +67,22 @@ class OnnxConfig {
     return options;
   }
 
+  /// Create an ONNX Runtime session from model bytes with automatic options cleanup.
+  ///
+  /// This helper method ensures that session options are properly released after
+  /// session creation, preventing native memory leaks.
+  ///
+  /// [modelBytes]: The ONNX model file contents as bytes.
+  /// Returns: A configured [OrtSession] ready for inference.
+  OrtSession createSession(Uint8List modelBytes) {
+    final options = createSessionOptions();
+    try {
+      return OrtSession.fromBuffer(modelBytes, options);
+    } finally {
+      options.release();
+    }
+  }
+
   @override
   String toString() {
     return 'OnnxConfig(threads: $intraOpNumThreads/$interOpNumThreads, '

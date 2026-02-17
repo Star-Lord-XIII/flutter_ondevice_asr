@@ -40,11 +40,10 @@ class SileroVAD {
   /// [onnxConfig] - Optional ONNX configuration. If not provided, uses lightweight defaults optimized for VAD.
   Future<void> loadModel([OnnxConfig? onnxConfig]) async {
     final config = onnxConfig ?? createDefaultConfig();
-    final options = config.createSessionOptions();
 
     final rawAssetFile = await rootBundle.load(sileroVadModelPath);
     final bytes = rawAssetFile.buffer.asUint8List();
-    _session = OrtSession.fromBuffer(bytes, options);
+    _session = config.createSession(bytes);
 
     _inputNames = _session.inputNames;
     _outputNames = _session.outputNames;

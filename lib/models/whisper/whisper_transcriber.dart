@@ -108,32 +108,26 @@ class WhisperTranscriber implements Transcriber {
     await _loadControlTokens();
 
     OrtEnv.instance.init();
-    final ortOptions = onnxConfig.createSessionOptions();
 
-    try {
-      // Load Super Encoder (combined preprocessor + encoder)
-      debugPrint("Loading Super Encoder Model...");
-      final superEncoderPath = '$modelDirectory/super_encoder.onnx';
-      final superEncoderBytes = await _loadBytes(superEncoderPath);
-      superEncoderSession = OrtSession.fromBuffer(superEncoderBytes, ortOptions);
-      debugPrint("Super Encoder loaded.");
+    // Load Super Encoder (combined preprocessor + encoder)
+    debugPrint("Loading Super Encoder Model...");
+    final superEncoderPath = '$modelDirectory/super_encoder.onnx';
+    final superEncoderBytes = await _loadBytes(superEncoderPath);
+    superEncoderSession = onnxConfig.createSession(superEncoderBytes);
+    debugPrint("Super Encoder loaded.");
 
-      // Load decoder and decoder with past model
-      debugPrint("Loading Decoder Model...");
-      final decoderPath = '$modelDirectory/decoder_model.onnx';
-      final decoderBytes = await _loadBytes(decoderPath);
-      decoderSession = OrtSession.fromBuffer(decoderBytes, ortOptions);
+    // Load decoder and decoder with past model
+    debugPrint("Loading Decoder Model...");
+    final decoderPath = '$modelDirectory/decoder_model.onnx';
+    final decoderBytes = await _loadBytes(decoderPath);
+    decoderSession = onnxConfig.createSession(decoderBytes);
 
-      final decoderWithPastPath = '$modelDirectory/decoder_with_past_model.onnx';
-      final decoderWithPastBytes = await _loadBytes(decoderWithPastPath);
-      decoderWithPastSession = OrtSession.fromBuffer(decoderWithPastBytes, ortOptions);
-      debugPrint("Decoder loaded.");
+    final decoderWithPastPath = '$modelDirectory/decoder_with_past_model.onnx';
+    final decoderWithPastBytes = await _loadBytes(decoderWithPastPath);
+    decoderWithPastSession = onnxConfig.createSession(decoderWithPastBytes);
+    debugPrint("Decoder loaded.");
 
-      debugPrint(">> All models loaded successfully! <<");
-    } finally {
-      // Release session options after all models are loaded
-      ortOptions.release();
-    }
+    debugPrint(">> All models loaded successfully! <<");
   }
 
   Future<void> _loadControlTokens() async {
