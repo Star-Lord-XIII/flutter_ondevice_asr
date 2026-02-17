@@ -12,8 +12,8 @@ void main() {
   const expectedTranscript = 'And so my fellow Americans. Ask, not! What you are country can do for you. And what you can do for your country.';
 
   // Model configuration - using bundled multilingual model
-  // const modelDirectory = 'assets/transcribers/whisper/models/default';
-  const modelDirectory = 'assets/transcribers/whisper/models/default_int8';
+  // const modelDirectory = 'assets/transcribers/whisper/models/whisper_tiny/default';
+  const modelDirectory = 'assets/transcribers/whisper/models/whisper_tiny/default_int8';
   const String language = 'en';
 
   // Streaming configuration

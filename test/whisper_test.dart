@@ -8,8 +8,8 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   // Model configuration - using bundled multilingual model
-  // const modelDirectory = 'assets/transcribers/whisper/models/default';
-  const modelDirectory = 'assets/transcribers/whisper/models/default_int8';
+  // const modelDirectory = 'assets/transcribers/whisper/models/whisper_tiny/default';
+  const modelDirectory = 'assets/transcribers/whisper/models/whisper_tiny/default_int8';
   const language = 'en';
 
   const testAudioFile = 'assets/audio/jfk_asknot.wav';

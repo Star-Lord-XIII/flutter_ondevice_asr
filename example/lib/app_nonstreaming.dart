@@ -98,7 +98,7 @@ class _TranscriptionDemoPageState extends State<TranscriptionDemoPage> {
 
       // Initialize WhisperTranscriber with selected language
       _whisper = WhisperTranscriber(
-        modelDirectory: 'assets/transcribers/whisper/models/default_int8',
+        modelDirectory: 'assets/transcribers/whisper/models/whisper_tiny/default_int8',
         language: _selectedLanguage,
         verbose: false,
       );

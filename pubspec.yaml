@@ -29,8 +29,8 @@ flutter:
    assets:
      - assets/audio/
      - assets/vad/silero_vad/
-     - assets/transcribers/whisper/models/default/
-     - assets/transcribers/whisper/models/default_int8/
+     - assets/transcribers/whisper/models/whisper_tiny/default/
+     - assets/transcribers/whisper/models/whisper_tiny/default_int8/
      - assets/transcribers/whisper/tokenizer/vocab_multilingual.json
      - assets/transcribers/whisper/tokenizer/vocab_en.json
   

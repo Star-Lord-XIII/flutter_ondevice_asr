@@ -1,8 +1,5 @@
 # Py tooling for conversion of HF whisper models to onnx
 
-* can be used for testing here
-* later needs to be integrated into training pipeline
-
 ## ONNX Whisper processor
 * based on https://github.com/istupakov/onnx-asr
     * onnx-asr preprocessor implementation

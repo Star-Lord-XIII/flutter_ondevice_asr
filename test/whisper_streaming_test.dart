@@ -6,7 +6,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   const testAudioFile = 'assets/audio/jfk_asknot.wav';
-  const modelDirectory = 'assets/transcribers/whisper/models/default_int8';
+  const modelDirectory = 'assets/transcribers/whisper/models/whisper_tiny/default_int8';
   const language = 'en';
   const chunkDurationMs = 100;
   const sampleRate = 16000;

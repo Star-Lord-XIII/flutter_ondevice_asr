@@ -32,7 +32,10 @@ build/
 
 # Source models (development only, NOT bundled with app)
 # Use conversion_tooling/build_assets.sh to generate bundled assets from models/
-models/
+/models/
+
+# Generated model assets (large files, generated via build_assets.sh)
+assets/transcribers/whisper/models/
 
 # Exclude ONNX files EXCEPT in assets/ (we want to commit bundled assets)
 *.onnx

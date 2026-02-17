@@ -43,7 +43,17 @@ The Whisper implementation uses a modified architecture for efficiency on phones
 
 Run from the project root (requires Python venv setup in `conversion_tooling/`):
 
-```bash
+Make sure you have a python environment with the required dependencies:
+```
+cd conversion_tooling
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements
+```
+
+then run the asset generation
+```
+cd ..
 ./build_assets.sh
 ```
 
@@ -79,8 +89,8 @@ Measured on test audio (`assets/audio/jfk_asknot.wav`, 11 seconds) in non-stream
 
 | Device | Model | Inference time (avg ± std) |
 | -- | -- | -- |
-| Mac M4 | default | 576.4 ± 37.3 ms |
-| Mac M4 | default_int8 | 477.8 ± 22.1 ms |
+| Macbook Pro M2 | default | 576.4 ± 37.3 ms |
+| Macbook Pro M2 | default_int8 | 477.8 ± 22.1 ms |
 | Samsung Galaxy 11A+ Tablet | default | 7758.6 ± 121.4 ms |
 | Samsung Galaxy 11A+ Tablet | default_int8 | 1137.0 ± 34.3 ms |
 | Huawei Y9 Prime 2019 (STK-L21) | default_int8 | 3370.0 +- 120.5 ms|
