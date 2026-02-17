@@ -1,0 +1,36 @@
+name: flutter_ondevice_asr
+description: "Model-agnostic on-device ASR library for Flutter. Supports Whisper and other speech recognition models with streaming capabilities."
+version: 0.0.1
+homepage:
+
+environment:
+  sdk: ^3.8.1
+  flutter: ">=1.17.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  onnxruntime_v2: ^1.23.2
+  path_provider: ^2.1.5
+  vector_math: ^2.2.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+# For information on the generic Dart part of this file, see the
+# following page: https://dart.dev/tools/pub/pubspec
+
+# The following section is specific to Flutter packages.
+flutter:
+
+  # To add assets to your package, add an assets section, like this:
+   assets:
+     - assets/audio/
+     - assets/vad/silero_vad/
+     - assets/transcribers/whisper/models/default/
+     - assets/transcribers/whisper/models/default_int8/
+     - assets/transcribers/whisper/tokenizer/vocab_multilingual.json
+     - assets/transcribers/whisper/tokenizer/vocab_en.json
+  

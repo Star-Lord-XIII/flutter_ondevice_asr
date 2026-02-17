@@ -1,0 +1,6 @@
+optimum[onnxruntime]
+transformers
+torch
+onnx
+onnxscript
+torchaudio
