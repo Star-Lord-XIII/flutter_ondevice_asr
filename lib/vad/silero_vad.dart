@@ -9,7 +9,8 @@ import 'package:onnxruntime_v2/onnxruntime_v2.dart';
 
 /// ONNX wrapper for Silero VAD model
 class SileroVAD {
-  final String sileroVadModelPath = 'packages/flutter_ondevice_asr/assets/vad/silero_vad/silero_vad.onnx'; 
+  final String sileroVadModelPath = 'packages/flutter_ondevice_asr/assets/vad/silero_vad/silero_vad.onnx';
+  final bool verbose;
 
   late final OrtSession _session;
   late final List<String> _inputNames;
@@ -28,6 +29,14 @@ class SileroVAD {
   int _lastBatchSize = 0;
 
   bool _isInitialized = false;
+
+  /// Create a Silero VAD instance
+  ///
+  /// Parameters:
+  /// - [verbose]: Enable verbose logging for debugging (default: false)
+  SileroVAD({
+    this.verbose = false,
+  });
 
   /// Create default ONNX configuration for VAD
   /// VAD is lightweight, so we use minimal threading
@@ -51,7 +60,7 @@ class SileroVAD {
     resetStates();
     _isInitialized = true;
 
-    if (kDebugMode) {
+    if (verbose) {
       debugPrint('[SileroVAD] Model loaded from: $sileroVadModelPath');
       debugPrint('[SileroVAD] Inputs: $_inputNames');
       debugPrint('[SileroVAD] Outputs: $_outputNames');
@@ -305,6 +314,7 @@ class SileroVADIterator {
   final int samplingRate;
   final int minSilenceDurationMs;
   final int speechPadMs;
+  final bool verbose;
 
   late final int _minSilenceSamples;
 
@@ -319,6 +329,7 @@ class SileroVADIterator {
     this.samplingRate = 16000,
     this.minSilenceDurationMs = 100,
     this.speechPadMs = 30,
+    this.verbose = false,
   }) {
     _minSilenceSamples = samplingRate * minSilenceDurationMs ~/ 1000;
   }
@@ -348,7 +359,7 @@ class SileroVADIterator {
 
     // Debug: Log probability periodically
     _callCount++;
-    if (kDebugMode && _callCount % 20 == 0) {
+    if (verbose && _callCount % 20 == 0) {
       debugPrint('[SileroVAD] Prob: ${speechProb.toStringAsFixed(3)}, Triggered: $_triggered, TempEnd: $_tempEnd');
     }
 
@@ -362,7 +373,7 @@ class SileroVADIterator {
       _triggered = true;
       _currentSample += windowSizeSamples;
 
-      if (kDebugMode) {
+      if (verbose) {
         debugPrint('[SileroVAD] Speech started (prob: ${speechProb.toStringAsFixed(3)})');
       }
 
@@ -383,7 +394,7 @@ class SileroVADIterator {
         _triggered = false;
         _currentSample += windowSizeSamples;
 
-        if (kDebugMode) {
+        if (verbose) {
           debugPrint('[SileroVAD] Speech ended (prob: ${speechProb.toStringAsFixed(3)})');
         }
 

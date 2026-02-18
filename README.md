@@ -4,8 +4,8 @@ A Flutter library for on-device automatic speech recognition (ASR):
 - Model-agnostic architecture supporting arbitrary ASR models
 - Streaming and non-streaming transcription
 - ONNX Runtime-based inference (different quantization schemes)
-- Uses onnxruntime_v2 for FFI-based fast inference (essential for autoregressive decoding)
-- ONNX-native preprocessing (mel spectrogram extraction in ONNX Runtime using opset 17 operators)
+
+The Whisper transcriber implementation has been tested on several different Android devices. When based on Whisper-tiny, it should run on mid-level phones in streaming mode. A fallback to non-streaming or semi-streaming (wait until segment end detected) should allow weaker devices to handle on-device transcription as well.
 
 ## Library Structure
 
@@ -45,43 +45,39 @@ The Whisper implementation uses a modified architecture for efficiency on phones
 * Uses `WhisperTokenizer` (`lib/models/whisper/whisper_tokenizer.dart`) for text encoding/decoding.
 * Works for en-only and multilingual whisper models
 
-### Architecture
+### Combined Preprocessing and Encoding
 
-**ONNX-Native Preprocessing:** All audio preprocessing (mel spectrogram extraction) is done within ONNX Runtime using standard operators (HannWindow, STFT, MatMul, Log, Pad). The preprocessor is defined in Python using `onnxscript` (`conversion_tooling/whisper_preprocessor.py`) and exported to ONNX format, ensuring it matches the core Whisper implementation exactly. This approach offers several benefits over Dart-based FFT:
-- **Performance**: ~15% faster (160ms → 135ms measured on macOS), with bigger gains expected on Android devices (2-3x faster on low-end devices) due to NEON/SIMD optimizations
+#### ONNX-Native Preprocessing
+
+All audio preprocessing (mel spectrogram extraction) is done within ONNX Runtime using standard operators (HannWindow, STFT, MatMul, Log, Pad). The preprocessor is defined in Python using `onnxscript` (`conversion_tooling/whisper_preprocessor.py`) and exported to ONNX format, ensuring it matches the core Whisper implementation exactly. This approach offers several benefits over Dart-based FFT:
+- **Performance**: ~15% faster (160ms → 135ms measured on macOS), with bigger gains expected on Android devices due to NEON/SIMD optimizations
 - **Quality**: Better transcription accuracy by using the exact same preprocessing operations as during Whisper training
 - **Efficiency**: Fewer memory allocations and reduced GC pressure by keeping data in native memory
 - **Portability**: Same ONNX graph works across all platforms
 
 This requires ONNX Runtime 1.22+ (opset 17 support), which is why we use `onnxruntime_v2`.
 
-**Super-Encoder:** The preprocessing stage (log-mel spectrogram conversion) is merged into the encoder, creating a "super-encoder" that processes raw audio directly in the ONNX graph. This is faster then running a seperate process to extract the log-mel spectrogram and then passing this into the encoder.
+#### Super-Encoder
 
-**Decoder Optimization:** Employs both `decoder.onnx` and `decoder_with_past.onnx` for efficient autoregressive generation with KV-cache. The FFI (Foreign Function Interface) communication in `onnxruntime_v2` enables direct Dart-to-native function calls with minimal overhead, avoiding the serialization cost (serializing/deserializing data) of MethodChannel alternatives (eg flutter_onnxruntime). This is essential for autoregressive decoding, which makes many decoder calls per transcription (depending on output length), where MethodChannel overhead would add overhead of wasted time.
+The preprocessing stage (log-mel spectrogram conversion) is merged into the encoder, creating a "super-encoder" that processes raw audio directly in the ONNX graph. This is faster then running a seperate process to extract the log-mel spectrogram and then passing this into the encoder.
+
+By merging the preprocessing and encoder into one onnx model/graph, we eliminate the need to transfer intermediate tensors between the host language (here: Dart) and the inference runtime (her: Onnx). This should be particularly valuable on mobile devices where memory bandwidth is limited and minimizing data transfers between different execution contexts significantly impacts performance and battery life.
+
+It also makes the code much simpler and abstracts preprocessing logic from the app (better guarantee that preprocessing during inference is the same as during training, which is critical for performance as encoder is very sensitive to preprocessing changes).
+
+### Decoder
+
+* We both `decoder.onnx` and `decoder_with_past.onnx` for efficient autoregressive generation with KV-cache. 
+* The FFI (Foreign Function Interface) communication in `onnxruntime_v2` enables direct Dart-to-native function calls with minimal overhead, avoiding the serialization cost (serializing/deserializing data) of MethodChannel alternatives (eg flutter_onnxruntime). This is essential for autoregressive decoding, which makes many decoder calls per transcription (depending on output length), where MethodChannel overhead would add overhead of wasted time.
 
 ### Asset Generation
 
-Run from the project root (requires Python venv setup in `conversion_tooling/`):
+Right now, all model specific asset files for the Whisper transcriber can be generated.
 
-Make sure you have a python environment with the required dependencies:
-```
-cd conversion_tooling
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements
-```
+This will first download the multilingual Whisper tiny model from HuggingFace, convert to Onnx using Optimum, then create the preprocessor as seperate Onnx model and eventually merge that with the encoder into a "super encoder" onnx model. All files are then moved to the assets folder.
 
-then run the asset generation
-```
-cd ..
-./build_assets.sh
-```
+We create both the f16 as well as the int8 qunatized version. For usage, unless quality impacts are too significant, it is highly recommended to use the int8 version.
 
-This script:
-1. Downloads Whisper models from HuggingFace using `convert_whisper_to_onnx.py`
-2. Generates preprocessor with `export_whisper_preprocessor.py`
-3. Merges preprocessor + encoder into super-encoder using `merge_preprocessor_encoder.py`
-4. Outputs to `assets/transcribers/whisper/models/{default,default_int8,default_int8_optimum}/`
 
 ## Testing
 
@@ -129,7 +125,6 @@ Future work: Extend measurements to corpus with varying audio lengths.
 
 ## Installation
 
-
 ### Setting Up This Project for Development
 
 ### Clone the repository and install dependencies
@@ -141,17 +136,38 @@ Future work: Extend measurements to corpus with varying audio lengths.
 
 ### Generate assets
 
-The library requires Whisper model files and tokenizer vocabularies. Generate them by running:
-```bash
+The library requires Whisper model files and tokenizer vocabularies. You need to generate them with the `conversion_tooling/`.
+
+Create a python environment and the required dependencies:
+```
+cd conversion_tooling
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements
+```
+
+Then run the asset generation script
+```
+cd ..
 ./build_assets.sh
 ```
 
-This requires a Python virtual environment in `conversion_tooling/` (see Asset Generation section above).
+
+This script runs through these steps:
+
+1. Downloads Whisper models from HuggingFace using `convert_whisper_to_onnx.py`
+2. Generates preprocessor with `export_whisper_preprocessor.py`
+3. Merges preprocessor + encoder into super-encoder using `merge_preprocessor_encoder.py`
+4. Outputs to `assets/transcribers/whisper/models/{default,default_int8,default_int8_optimum}/`
 
 
 ### Running Unit Tests
 
 Unit tests (`flutter test`) run in a pure Dart VM without building native libraries. Since this library uses `onnxruntime_v2` (which uses FFI to call native ONNX Runtime), you need to install the native library locally for unit tests to work.
+
+The unit tests are on purpose maximally verbose. For the transcription and especially the streaming transcription test, this will show information for every 512 frame sample being recorded and allows to track the streaming decisions for debugging purposes.
+
+This level of verbosity needs to be avoided in a production setting!
 
 Integration tests (`integration_test/`) don't require this setup as they build the full app with native libraries included automatically.
 

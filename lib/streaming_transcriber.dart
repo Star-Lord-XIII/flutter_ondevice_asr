@@ -31,8 +31,10 @@ class StreamingTranscriber {
   final List<double> _speechBuffer = [];
   final List<double> _vadChunkBuffer = []; // Buffer for accumulating into 512-sample chunks for Silero VAD
   bool _isRecording = false;
-  int _lastPartialBufferLength = 0; // Track buffer length at last partial transcription
   int _chunkCounter = 0;
+  double _bufferDurationSeconds = 0.0; // Cached duration to avoid repeated division
+  double _newAudioDurationSeconds = 0.0; // Duration of new audio since last partial
+  late final double _vadChunkDurationSeconds; // Duration of one VAD chunk, calculated once
 
   bool _isDisposed = false;
 
@@ -65,8 +67,15 @@ class StreamingTranscriber {
   ///
   /// Optional session parameters (can be changed later via `configure()`):
   /// - [enablePartials]: Emit partial transcriptions during speech (default: **true**)
+  ///   This will trigger a transcriber call whenever enough data for a partial is collected 
+  ///   (len >= minPartialDuration) and especially for short minPartialDuration this will lead
+  ///   to significant system use. For weaker devices, it will be important to set minPartialDuration
+  ///   conservatively (ie, high). However, in order for transcriptions to feel real-time we would
+  ///   ideally set minPartialDuration to 300ms.
   /// - [minPartialDuration]: Minimum ms between partial updates (default: **500**)
-  /// - [maxSegmentDuration]: Maximum segment length in ms before forcing end (default: **10000**)
+  /// - [maxSegmentDuration]: Maximum segment length in ms before forcing end (default: **30000**)
+  ///   We limit this to the maximum segment length, Whisper can natively handle. We intentionally
+  ///   skip any sort of sliding window approaches in the streaming-based transcription for efficiency.
   /// - [vadOnnxConfig]: ONNX config for VAD model.
   /// - [verbose]: Enable verbose logging for debugging (default: **false**)
   static Future<StreamingTranscriber> create({
@@ -76,7 +85,7 @@ class StreamingTranscriber {
     int sampleRate = 16000,
     bool enablePartials = true,
     int minPartialDuration = 500,
-    int maxSegmentDuration = 10000,
+    int maxSegmentDuration = 30000,
     OnnxConfig? vadOnnxConfig,
     bool verbose = false,
   }) async {
@@ -99,7 +108,7 @@ class StreamingTranscriber {
   }
 
   Future<void> _initializeVAD() async {
-    sileroModel = SileroVAD();
+    sileroModel = SileroVAD(verbose: verbose);
 
     // Use provided VAD config, or use VAD-specific lightweight default
     // Note: We DON'T default to transcriber config because VAD needs different settings
@@ -111,7 +120,11 @@ class StreamingTranscriber {
       threshold: vadThreshold,
       samplingRate: sampleRate,
       minSilenceDurationMs: eosMinSilence,
+      verbose: verbose,
     );
+
+    // Calculate chunk duration once (same for all chunks)
+    _vadChunkDurationSeconds = sileroModel.requiredChunkSize / sampleRate;
 
     debugPrint('[Streaming] Using Silero VAD (threshold: $vadThreshold)');
   }
@@ -142,16 +155,17 @@ class StreamingTranscriber {
     // Add incoming audio to VAD buffer
     _vadChunkBuffer.addAll(audioChunk);
 
-    // Process VAD in 512-sample chunks (matches Python logic exactly)
+    // Process VAD in 512-sample (sileroModel.requiredChunkSize) chunks
     while (_vadChunkBuffer.length >= sileroModel.requiredChunkSize) {
-      // Extract exactly 512 samples for VAD
       final vadChunk = Float32List.fromList(_vadChunkBuffer.sublist(0, sileroModel.requiredChunkSize));
       _vadChunkBuffer.removeRange(0, sileroModel.requiredChunkSize);
       _chunkCounter++;
 
-      // Add to speech buffer
+      // Add to speech buffer and update duration counters
       _speechBuffer.addAll(vadChunk);
-      final bufferDuration = _speechBuffer.length / sampleRate;
+      _bufferDurationSeconds += _vadChunkDurationSeconds;
+      _newAudioDurationSeconds += _vadChunkDurationSeconds;
+      final bufferDuration = _bufferDurationSeconds;
 
       // Log periodically every 50 chunks (helps debug if audio is flowing)
       if (verbose && _chunkCounter % 50 == 0) {
@@ -165,20 +179,19 @@ class StreamingTranscriber {
         if (vadEvent == 'start') {
           // Speech started - reset partial tracking
           _isRecording = true;
-          _lastPartialBufferLength = 0;
+          _newAudioDurationSeconds = 0.0;
           if (verbose) {
             debugPrint('[Streaming] Speech started (buffer: ${bufferDuration.toStringAsFixed(2)}s)');
           }
         } else if (vadEvent == 'end') {
-          // End of segment detected by VAD
+          // End of segment detected by VAD - should transcribe
           _isRecording = false;
           if (verbose) {
             debugPrint('[Streaming] Speech ended (buffer: ${bufferDuration.toStringAsFixed(2)}s)');
           }
 
           if (_speechBuffer.isNotEmpty) {
-            final audioData = Float32List.fromList(_speechBuffer);
-            final result = await transcriber.transcribe(audioData, withConfidence: false);
+            final result = await transcriber.transcribe(Float32List.fromList(_speechBuffer), withConfidence: false);
 
             // Only emit if we got actual text
             if (result.text.isNotEmpty) {
@@ -203,25 +216,22 @@ class StreamingTranscriber {
 
           // Reset buffer AFTER transcription finishes
           _speechBuffer.clear();
+          _bufferDurationSeconds = 0.0;
 
           // Break out of loop - let next processAudioChunk() call handle accumulated chunks
           break;
         }
       } else {
-        // No VAD event - check if we should send partial or force end
+        // No "new" VAD event - check if we have collected enough speech data for a partial to transcribe 
+        // or whether we need to force end because we're hitting the max partial length
         if (_isRecording) {
-          // Calculate how much NEW audio has accumulated since last partial
-          final newAudioSamples = _speechBuffer.length - _lastPartialBufferLength;
-          final newAudioDuration = newAudioSamples / sampleRate;
-
           // Force end if segment is too long
-          if (bufferDuration * 1000 > _maxSegmentDuration) {
+          if (bufferDuration * 1000 >= _maxSegmentDuration) {
             if (verbose) {
               debugPrint('[Streaming] Max segment duration reached, forcing end');
             }
 
-            final audioData = Float32List.fromList(_speechBuffer);
-            final result = await transcriber.transcribe(audioData, withConfidence: false);
+            final result = await transcriber.transcribe(Float32List.fromList(_speechBuffer), withConfidence: false);
 
             // Only emit if we got actual text
             if (result.text.isNotEmpty) {
@@ -244,19 +254,20 @@ class StreamingTranscriber {
 
             // Clear buffer completely (treat like VAD end event)
             _speechBuffer.clear();
-            _lastPartialBufferLength = 0;
+            _bufferDurationSeconds = 0.0;
+            _newAudioDurationSeconds = 0.0;
 
             // Break out of loop - let next processAudioChunk() call handle accumulated chunks
             break;
           }
           // Send partial transcription if enough NEW audio has accumulated since last partial
-          else if (_enablePartials && newAudioDuration * 1000 > _minPartialDuration) {
+          // only if _enablePartials !
+          else if (_enablePartials && _newAudioDurationSeconds * 1000 >= _minPartialDuration) {
             if (verbose) {
               debugPrint('[Streaming] Sending partial transcription');
             }
 
-            final audioData = Float32List.fromList(_speechBuffer);
-            final result = await transcriber.transcribe(audioData, withConfidence: false);
+            final result = await transcriber.transcribe(Float32List.fromList(_speechBuffer), withConfidence: false);
 
             // Only emit if we got actual text
             if (result.text.isNotEmpty) {
@@ -277,15 +288,21 @@ class StreamingTranscriber {
               }
             }
 
-            // Update tracking - we've now transcribed up to current buffer length
+            // Reset new audio duration - we've now transcribed everything
             // Keep the buffer growing for next partial/final
-            _lastPartialBufferLength = _speechBuffer.length;
+            _newAudioDurationSeconds = 0.0;
 
             // Break out of loop - let next processAudioChunk() call handle accumulated chunks
             break;
           }
+          else {
+            if (verbose) {
+              debugPrint('[Streaming] Collecting speech (buffer: ${bufferDuration.toStringAsFixed(2)}s)');
+            }
+          }
         } else {
-          // Not recording - keep only small buffer to avoid cutting off speech start
+          // Not recording - keep only small buffer of empty frames (no speech as detected by VAD) 
+          // to avoid cutting off speech start
           final emptyFramesToKeep = (0.1 * sampleRate).toInt();
           if (_speechBuffer.length > emptyFramesToKeep) {
             _speechBuffer.removeRange(0, _speechBuffer.length - emptyFramesToKeep);
@@ -322,6 +339,7 @@ class StreamingTranscriber {
         }
       }
       _speechBuffer.clear();
+      _bufferDurationSeconds = 0.0;
     }
   }
 
@@ -329,8 +347,9 @@ class StreamingTranscriber {
   void reset() {
     _speechBuffer.clear();
     _vadChunkBuffer.clear();
+    _bufferDurationSeconds = 0.0;
+    _newAudioDurationSeconds = 0.0;
     _isRecording = false;
-    _lastPartialBufferLength = 0;
     _chunkCounter = 0;
 
     _sileroVad.resetStates();
