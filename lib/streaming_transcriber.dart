@@ -32,9 +32,10 @@ class StreamingTranscriber {
   final List<double> _vadChunkBuffer = []; // Buffer for accumulating into 512-sample chunks for Silero VAD
   bool _isRecording = false;
   int _chunkCounter = 0;
-  double _bufferDurationSeconds = 0.0; // Cached duration to avoid repeated division
-  double _newAudioDurationSeconds = 0.0; // Duration of new audio since last partial
+  double _bufferDurationSeconds = 0.0; // Total duration in buffer since VAD start
+  double _newAudioDurationSeconds = 0.0; // Duration of new audio since last partial transcription
   late final double _vadChunkDurationSeconds; // Duration of one VAD chunk, calculated once
+  bool _transcriptionInProgress = false; // Track if transcription is currently running
 
   bool _isDisposed = false;
 
@@ -190,33 +191,27 @@ class StreamingTranscriber {
             debugPrint('[Streaming] Speech ended (buffer: ${bufferDuration.toStringAsFixed(2)}s)');
           }
 
-          if (_speechBuffer.isNotEmpty) {
-            final result = await transcriber.transcribe(Float32List.fromList(_speechBuffer), withConfidence: false);
+          if (_speechBuffer.isNotEmpty && !_transcriptionInProgress) {
+            // Copy buffer for async transcription
+            final audioToTranscribe = Float32List.fromList(_speechBuffer);
+            final duration = bufferDuration;
 
-            // Only emit if we got actual text
-            if (result.text.isNotEmpty) {
-              // Create streaming result (override duration from transcribe to use actual buffer duration)
-              final streamingResult = TranscriptionResult(
-                text: result.text,
-                isFinal: true,
-                duration: bufferDuration,
-                timestamp: DateTime.now(),
-                wordConfidences: result.wordConfidences,
-              );
+            // Clear buffer immediately - VAD end means segment is complete
+            _speechBuffer.clear();
+            _bufferDurationSeconds = 0.0;
+            _newAudioDurationSeconds = 0.0;
 
-              if (!_transcriptionController.isClosed) {
-                _transcriptionController.add(streamingResult);
-              }
-
-              if (verbose) {
-                debugPrint('[Streaming] Final (${bufferDuration.toStringAsFixed(2)}s): ${result.text}');
-              }
-            }
+            // Run transcription asynchronously without blocking
+            _transcriptionInProgress = true;
+            _transcribeAsync(audioToTranscribe, duration, isFinal: true).then((_) {
+              _transcriptionInProgress = false;
+            });
+          } else if (_speechBuffer.isNotEmpty) {
+            // Transcription already in progress, just clear buffer
+            _speechBuffer.clear();
+            _bufferDurationSeconds = 0.0;
+            _newAudioDurationSeconds = 0.0;
           }
-
-          // Reset buffer AFTER transcription finishes
-          _speechBuffer.clear();
-          _bufferDurationSeconds = 0.0;
 
           // Break out of loop - let next processAudioChunk() call handle accumulated chunks
           break;
@@ -231,31 +226,27 @@ class StreamingTranscriber {
               debugPrint('[Streaming] Max segment duration reached, forcing end');
             }
 
-            final result = await transcriber.transcribe(Float32List.fromList(_speechBuffer), withConfidence: false);
+            if (!_transcriptionInProgress) {
+              // Copy buffer for async transcription
+              final audioToTranscribe = Float32List.fromList(_speechBuffer);
+              final duration = bufferDuration;
 
-            // Only emit if we got actual text
-            if (result.text.isNotEmpty) {
-              final streamingResult = TranscriptionResult(
-                text: result.text,
-                isFinal: true,
-                duration: bufferDuration,
-                timestamp: DateTime.now(),
-                wordConfidences: result.wordConfidences,
-              );
+              // Clear buffer - max segment forces final transcription
+              _speechBuffer.clear();
+              _bufferDurationSeconds = 0.0;
+              _newAudioDurationSeconds = 0.0;
 
-              if (!_transcriptionController.isClosed) {
-                _transcriptionController.add(streamingResult);
-              }
-
-              if (verbose) {
-                debugPrint('[Streaming] Final (forced, ${bufferDuration.toStringAsFixed(2)}s): ${result.text}');
-              }
+              // Run transcription asynchronously without blocking
+              _transcriptionInProgress = true;
+              _transcribeAsync(audioToTranscribe, duration, isFinal: true).then((_) {
+                _transcriptionInProgress = false;
+              });
+            } else {
+              // Transcription already in progress, just clear buffer
+              _speechBuffer.clear();
+              _bufferDurationSeconds = 0.0;
+              _newAudioDurationSeconds = 0.0;
             }
-
-            // Clear buffer completely (treat like VAD end event)
-            _speechBuffer.clear();
-            _bufferDurationSeconds = 0.0;
-            _newAudioDurationSeconds = 0.0;
 
             // Break out of loop - let next processAudioChunk() call handle accumulated chunks
             break;
@@ -263,37 +254,29 @@ class StreamingTranscriber {
           // Send partial transcription if enough NEW audio has accumulated since last partial
           // only if _enablePartials !
           else if (_enablePartials && _newAudioDurationSeconds * 1000 >= _minPartialDuration) {
-            if (verbose) {
-              debugPrint('[Streaming] Sending partial transcription');
-            }
-
-            final result = await transcriber.transcribe(Float32List.fromList(_speechBuffer), withConfidence: false);
-
-            // Only emit if we got actual text
-            if (result.text.isNotEmpty) {
-              final streamingResult = TranscriptionResult(
-                text: result.text,
-                isFinal: false,
-                duration: bufferDuration,
-                timestamp: DateTime.now(),
-                wordConfidences: result.wordConfidences,
-              );
-
-              if (!_transcriptionController.isClosed) {
-                _transcriptionController.add(streamingResult);
-              }
-
+            if (!_transcriptionInProgress) {
               if (verbose) {
-                debugPrint('[Streaming] Partial (${bufferDuration.toStringAsFixed(2)}s): ${result.text}');
+                debugPrint('[Streaming] Sending partial transcription');
               }
+
+              // Copy ENTIRE buffer for cumulative partial transcription
+              final audioToTranscribe = Float32List.fromList(_speechBuffer);
+              final duration = bufferDuration;
+
+              // DO NOT clear _speechBuffer - partials are cumulative within a VAD segment!
+              // Only reset new audio counter
+              _newAudioDurationSeconds = 0.0;
+
+              // Run transcription asynchronously without blocking
+              _transcriptionInProgress = true;
+              _transcribeAsync(audioToTranscribe, duration, isFinal: false).then((_) {
+                _transcriptionInProgress = false;
+              });
+
+              // Break out of loop - let next processAudioChunk() call handle accumulated chunks
+              break;
             }
-
-            // Reset new audio duration - we've now transcribed everything
-            // Keep the buffer growing for next partial/final
-            _newAudioDurationSeconds = 0.0;
-
-            // Break out of loop - let next processAudioChunk() call handle accumulated chunks
-            break;
+            // else: transcription in progress, keep accumulating and will trigger again after it completes
           }
           else {
             if (verbose) {
@@ -314,6 +297,11 @@ class StreamingTranscriber {
 
   /// Flush any remaining audio in the buffer (call this when stopping the stream)
   Future<void> flush() async {
+    // Wait for any in-progress transcription to complete
+    while (_transcriptionInProgress) {
+      await Future.delayed(const Duration(milliseconds: 10));
+    }
+
     if (_speechBuffer.isNotEmpty) {
       final bufferDuration = _speechBuffer.length / sampleRate;
       final audioData = Float32List.fromList(_speechBuffer);
@@ -340,6 +328,37 @@ class StreamingTranscriber {
       }
       _speechBuffer.clear();
       _bufferDurationSeconds = 0.0;
+    }
+  }
+
+  /// Helper method to run transcription asynchronously without blocking audio processing
+  Future<void> _transcribeAsync(Float32List audio, double duration, {required bool isFinal}) async {
+    try {
+      final result = await transcriber.transcribe(audio, withConfidence: false);
+
+      // Only emit if we got actual text
+      if (result.text.isNotEmpty) {
+        final streamingResult = TranscriptionResult(
+          text: result.text,
+          isFinal: isFinal,
+          duration: duration,
+          timestamp: DateTime.now(),
+          wordConfidences: result.wordConfidences,
+        );
+
+        if (!_transcriptionController.isClosed) {
+          _transcriptionController.add(streamingResult);
+        }
+
+        if (verbose) {
+          final label = isFinal ? 'Final' : 'Partial';
+          debugPrint('[Streaming] $label (${duration.toStringAsFixed(2)}s): ${result.text}');
+        }
+      }
+    } catch (e) {
+      if (verbose) {
+        debugPrint('[Streaming] Transcription error: $e');
+      }
     }
   }
 
