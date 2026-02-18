@@ -53,7 +53,7 @@ void main() {
       enablePartials: true,
       minPartialDuration: 500,
       maxSegmentDuration: 10000,
-      verbose: true,
+      verbose: false, // for time measurements to make sense, we need to turn of excessive logging
     );
     logStep('Streaming transcriber initialized');
 
@@ -82,9 +82,7 @@ void main() {
 
       if (result.isFinal) {
         finalCount++;
-        print('\n[SEGMENT #$finalCount] FINAL (${result.duration.toStringAsFixed(2)}s):');
-        print('  "${result.text}"');
-        print('  Timestamp: ${result.timestamp}');
+        print('\n[SEGMENT #$finalCount] FINAL (${result.duration.toStringAsFixed(2)}s): "${result.text}"');
         finalResults.add(result);
       } else {
         partialCount++;

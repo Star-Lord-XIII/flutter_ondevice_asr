@@ -6,6 +6,7 @@ import 'package:integration_test/integration_test.dart';
 import 'package:flutter_ondevice_asr/flutter_ondevice_asr.dart';
 import 'package:path_provider/path_provider.dart';
 
+
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
@@ -39,7 +40,7 @@ void main() {
     final whisper = WhisperTranscriber(
       modelDirectory: modelDirectory,
       language: language,
-      verbose: true,
+      verbose: false, // for time measurements to make sense, we need to turn of excessive logging
     );
 
     // 2. Load models
