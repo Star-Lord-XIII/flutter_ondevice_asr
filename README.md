@@ -78,6 +78,38 @@ This will first download the multilingual Whisper tiny model from HuggingFace, c
 
 We create both the f16 as well as the int8 qunatized version. For usage, unless quality impacts are too significant, it is highly recommended to use the int8 version.
 
+## Configuration
+
+
+### Streaming
+
+Streaming-based system has the following parameters to set:
+
+* **vadThreshold**: VAD sensitivity, 0.0-1.0
+  - Higher = less sensitive (fewer false positives, may miss quiet speech)
+  - Lower = more sensitive (catches quiet speech, more false positives)
+* **eosMinSilence**: Silence duration in ms to end a segment
+  - How long to wait after speech stops before finalizing. 
+  - Defaults are good for standard speech, but may need adjustment for particularly slow or fast speech.
+* **enablePartials**: Emit partial transcriptions during speech. This will trigger a transcriber call whenever enough data for a partial is collected (len >= minPartialDuration) and especially for short minPartialDuration this will lead to significant system use. For weaker devices, it will be important to set minPartialDuration conservatively (ie, high). However, in order for transcriptions to feel real-time we would ideally set minPartialDuration to 300ms.
+* **minPartialDuration**: Minimum ms between partial updates. Only relevent of `enablePartials=true`.
+* **maxSegmentDuration**: Maximum segment length in ms before forcing end of segment. We limit this to the maximum segment length, Whisper can natively handle (30seconds). Practically, we will often however have shorter max segment length to allow for smooth transcriptions, recommended is 15 secs.
+
+
+How to set them will depend both on the speaker (wrt to the VAD setting) as well as on the device where transcription is being run.
+
+**Speaker-specific settings:**
+
+* eosMinSilence: if someone speaks very slowly, increase this, so that we don't cut segments too often and then end up transcribing individual words out of context.
+* minPartialDuration: for a slow speaker, also increase this. Ideally we have 2 words per partial to transcribe for reasonable transcription quality. 
+* enablePartials: if someone speaks really slowly, partial transcripts are probably not very helpful and will instead lead to very poor partial transcripts, likely confusing the speaker. In this case consider turning partials off completely, set the eosMinSilence aligned with the speaker's pausing structure, crank up maxSegmentDuration. Testing with the user will be very important!
+
+**Hardware-specific settings:**
+
+* no all devices will be powerful enough to allow streaming
+* a simple inbetween solution is streaming without partials. That will allow the user to just open the microphone and start speaking, but we are limiting transcriptions to whenever full segments (based on VAD events) are captured.
+* when we run streaming _with_ partials, the general rule of thumb is: `minPartialDuration >= transcription_time * 1.1`. Ie, if the device needs `500ms` to transcribe a chunk, then the partials should be at least `550ms`, to prevent bursty streaming behavior and a backlog of transcription data.
+
 
 ## Testing
 

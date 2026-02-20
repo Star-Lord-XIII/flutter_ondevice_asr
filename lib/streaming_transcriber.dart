@@ -30,12 +30,13 @@ class StreamingTranscriber {
 
   final List<double> _speechBuffer = [];
   final List<double> _vadChunkBuffer = []; // Buffer for accumulating into 512-sample chunks for Silero VAD
-  bool _isRecording = false;
+  bool _isRecordingSpeech = false;
   int _chunkCounter = 0;
   double _bufferDurationSeconds = 0.0; // Total duration in buffer since VAD start
   double _newAudioDurationSeconds = 0.0; // Duration of new audio since last partial transcription
   late final double _vadChunkDurationSeconds; // Duration of one VAD chunk, calculated once
   bool _transcriptionInProgress = false; // Track if transcription is currently running
+  bool _bufferContainsSpeech = false; // Track if buffer contains untranscribed speech (not just silence padding)
 
   bool _isDisposed = false;
 
@@ -170,7 +171,7 @@ class StreamingTranscriber {
 
       // Log periodically every 50 chunks (helps debug if audio is flowing)
       if (verbose && _chunkCounter % 50 == 0) {
-        debugPrint('[Streaming] Chunk #$_chunkCounter: Buffer=${bufferDuration.toStringAsFixed(2)}s, Recording=$_isRecording');
+        debugPrint('[Streaming] Chunk #$_chunkCounter: Buffer=${bufferDuration.toStringAsFixed(2)}s, RecordingSpeech=$_isRecordingSpeech');
       }
 
       // Process with VAD
@@ -178,15 +179,20 @@ class StreamingTranscriber {
 
       if (vadEvent != null) {
         if (vadEvent == 'start') {
-          // Speech started - reset partial tracking
-          _isRecording = true;
-          _newAudioDurationSeconds = 0.0;
+          // Speech started - mark as recording speech
+          _isRecordingSpeech = true;
+          _bufferContainsSpeech = true; // Buffer now contains speech
+          // Only reset partial tracking if no transcription is in progress
+          // If transcription is running, we want to keep track of accumulated untranscribed audio
+          if (!_transcriptionInProgress) {
+            _newAudioDurationSeconds = 0.0;
+          }
           if (verbose) {
             debugPrint('[Streaming] Speech started (buffer: ${bufferDuration.toStringAsFixed(2)}s)');
           }
         } else if (vadEvent == 'end') {
           // End of segment detected by VAD - should transcribe
-          _isRecording = false;
+          _isRecordingSpeech = false;
           if (verbose) {
             debugPrint('[Streaming] Speech ended (buffer: ${bufferDuration.toStringAsFixed(2)}s)');
           }
@@ -200,26 +206,20 @@ class StreamingTranscriber {
             _speechBuffer.clear();
             _bufferDurationSeconds = 0.0;
             _newAudioDurationSeconds = 0.0;
+            _bufferContainsSpeech = false; // Buffer cleared, no more untranscribed speech
 
             // Run transcription asynchronously without blocking
             _transcriptionInProgress = true;
             _transcribeAsync(audioToTranscribe, duration, isFinal: true).then((_) {
               _transcriptionInProgress = false;
             });
-          } else if (_speechBuffer.isNotEmpty) {
-            // Transcription already in progress, just clear buffer
-            _speechBuffer.clear();
-            _bufferDurationSeconds = 0.0;
-            _newAudioDurationSeconds = 0.0;
           }
-
-          // Break out of loop - let next processAudioChunk() call handle accumulated chunks
-          break;
+          // If transcription is in progress, keep accumulating buffer - don't discard speech
         }
       } else {
-        // No "new" VAD event - check if we have collected enough speech data for a partial to transcribe 
+        // No "new" VAD event - check if we have collected enough speech data for a partial to transcribe
         // or whether we need to force end because we're hitting the max partial length
-        if (_isRecording) {
+        if (_isRecordingSpeech) {
           // Force end if segment is too long
           if (bufferDuration * 1000 >= _maxSegmentDuration) {
             if (verbose) {
@@ -235,21 +235,15 @@ class StreamingTranscriber {
               _speechBuffer.clear();
               _bufferDurationSeconds = 0.0;
               _newAudioDurationSeconds = 0.0;
+              _bufferContainsSpeech = false; // Buffer cleared, no more untranscribed speech
 
               // Run transcription asynchronously without blocking
               _transcriptionInProgress = true;
               _transcribeAsync(audioToTranscribe, duration, isFinal: true).then((_) {
                 _transcriptionInProgress = false;
               });
-            } else {
-              // Transcription already in progress, just clear buffer
-              _speechBuffer.clear();
-              _bufferDurationSeconds = 0.0;
-              _newAudioDurationSeconds = 0.0;
             }
-
-            // Break out of loop - let next processAudioChunk() call handle accumulated chunks
-            break;
+            // If transcription is in progress, keep accumulating buffer - don't discard speech
           }
           // Send partial transcription if enough NEW audio has accumulated since last partial
           // only if _enablePartials !
@@ -265,6 +259,7 @@ class StreamingTranscriber {
 
               // DO NOT clear _speechBuffer - partials are cumulative within a VAD segment!
               // Only reset new audio counter
+              // Note: _bufferContainsSpeech stays true since buffer is not cleared for partials
               _newAudioDurationSeconds = 0.0;
 
               // Run transcription asynchronously without blocking
@@ -272,9 +267,6 @@ class StreamingTranscriber {
               _transcribeAsync(audioToTranscribe, duration, isFinal: false).then((_) {
                 _transcriptionInProgress = false;
               });
-
-              // Break out of loop - let next processAudioChunk() call handle accumulated chunks
-              break;
             }
             // else: transcription in progress, keep accumulating and will trigger again after it completes
           }
@@ -284,11 +276,36 @@ class StreamingTranscriber {
             }
           }
         } else {
-          // Not recording - keep only small buffer of empty frames (no speech as detected by VAD) 
+          // Not recording speech - but check if we have stale buffered speech that needs transcribing
+          if (_bufferContainsSpeech && !_transcriptionInProgress &&
+              bufferDuration * 1000 >= _maxSegmentDuration) {
+            if (verbose) {
+              debugPrint('[Streaming] Stale buffered speech exceeded max segment duration, forcing transcription');
+            }
+
+            // Transcribe the stale buffered speech
+            final audioToTranscribe = Float32List.fromList(_speechBuffer);
+            final duration = bufferDuration;
+
+            _speechBuffer.clear();
+            _bufferDurationSeconds = 0.0;
+            _newAudioDurationSeconds = 0.0;
+            _bufferContainsSpeech = false;
+
+            _transcriptionInProgress = true;
+            _transcribeAsync(audioToTranscribe, duration, isFinal: true).then((_) {
+              _transcriptionInProgress = false;
+            });
+          }
+
+          // Keep only small buffer of empty frames (no speech as detected by VAD)
           // to avoid cutting off speech start
-          final emptyFramesToKeep = (0.1 * sampleRate).toInt();
-          if (_speechBuffer.length > emptyFramesToKeep) {
-            _speechBuffer.removeRange(0, _speechBuffer.length - emptyFramesToKeep);
+          // BUT: Don't trim if we have untranscribed speech waiting in the buffer
+          if (!_bufferContainsSpeech) {
+            final emptyFramesToKeep = (0.1 * sampleRate).toInt();
+            if (_speechBuffer.length > emptyFramesToKeep) {
+              _speechBuffer.removeRange(0, _speechBuffer.length - emptyFramesToKeep);
+            }
           }
         }
       }
@@ -328,6 +345,7 @@ class StreamingTranscriber {
       }
       _speechBuffer.clear();
       _bufferDurationSeconds = 0.0;
+      _bufferContainsSpeech = false;
     }
   }
 
@@ -368,7 +386,8 @@ class StreamingTranscriber {
     _vadChunkBuffer.clear();
     _bufferDurationSeconds = 0.0;
     _newAudioDurationSeconds = 0.0;
-    _isRecording = false;
+    _isRecordingSpeech = false;
+    _bufferContainsSpeech = false;
     _chunkCounter = 0;
 
     _sileroVad.resetStates();

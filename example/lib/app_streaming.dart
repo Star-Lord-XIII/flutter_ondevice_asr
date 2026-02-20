@@ -375,9 +375,9 @@ class _StreamingTranscriptionPageState extends State<StreamingTranscriptionPage>
     setState(() {
       _transcription = '';
       _currentPartial = '';
+      _logMessages = '';
     });
     _streaming?.reset();
-    _addLog('Transcriptions cleared');
   }
 
   @override
