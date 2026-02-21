@@ -97,13 +97,13 @@ void main() {
 
     // Test 2: WITH confidence (single run)
     debugPrint('\n=== Test 2: transcribe() WITH confidence (1 run) ===');
-    final result = await whisper.transcribe(audioData, withConfidence: true, maxOutputTokens: 32);
+    final result = await whisper.transcribe(audioData, getWordDetails: true, maxOutputTokens: 32);
     final transcript2 = result.text;
-    final wordConfidences = result.wordConfidences!;
+    final words = result.words!;
 
     debugPrint('Transcript: $transcript2');
-    debugPrint('Word confidences: ${wordConfidences.map((wc) => '${wc.word}(${wc.confidence.toStringAsFixed(3)})').join(', ')}');
-    debugPrint('Number of words: ${wordConfidences.length}');
+    debugPrint('Word confidences: ${words.map((w) => '${w.word}(${w.confidence.toStringAsFixed(3)})').join(', ')}');
+    debugPrint('Number of words: ${words.length}');
     final avgConfidence = result.avgConfidence!;
     debugPrint('Average confidence: $avgConfidence');
 

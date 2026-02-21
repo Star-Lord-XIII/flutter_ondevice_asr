@@ -18,7 +18,10 @@ This library uses a **model-agnostic architecture** that separates transcription
   - Transcribed text
   - Final/partial indicator (for streaming)
   - Audio duration and timestamp
-  - Optional word-level confidence scores with average confidence calculation
+  - Optional word-level data with timing and confidence scores
+  - Optional segment-level data and confidence scores
+  - Optional compression ratios for hallucination detection
+- `Word`: Word-level transcription with confidence score and timing information (start/end times)
 - `OnnxConfig`: Runtime configuration for ONNX models
 
 **Model Implementations:**

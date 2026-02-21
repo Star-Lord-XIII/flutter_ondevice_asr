@@ -429,21 +429,33 @@ class WhisperTranscriber implements Transcriber {
   @override
   Future<TranscriptionResult> transcribeFile(
     String path, {
-    bool withConfidence = false,
+    bool segmentEnd = true,
+    bool getWordDetails = false,
+    bool getSegmentDetails = false,
     int? maxOutputTokens,
   }) async {
     final audio = await compute(Audio.instance.loadAudio, path);
-    return transcribe(audio, withConfidence: withConfidence, maxOutputTokens: maxOutputTokens);
+    return transcribe(
+      audio,
+      segmentEnd: segmentEnd,
+      getWordDetails: getWordDetails,
+      getSegmentDetails: getSegmentDetails,
+      maxOutputTokens: maxOutputTokens,
+    );
   }
 
   /// Transcribe audio to text
   ///
   /// Returns a [TranscriptionResult] with the transcribed text and metadata.
-  /// If [withConfidence] is true, includes word-level confidence scores.
+  /// If [segmentEnd] is true, uses full quality settings for final transcription.
+  /// If [getWordDetails] is true, includes word-level data with confidence scores and timing.
+  /// If [getSegmentDetails] is true, includes segment-level information.
   @override
   Future<TranscriptionResult> transcribe(
     Float32List audio, {
-    bool withConfidence = false,
+    bool segmentEnd = true,
+    bool getWordDetails = false,
+    bool getSegmentDetails = false,
     int? maxOutputTokens,
   }) async {
     final t1 = DateTime.now();
@@ -469,7 +481,7 @@ class WhisperTranscriber implements Transcriber {
     }
 
     // Decode with or without confidence calculation
-    final decoderResult = _runDecoder(audioFeaturesTensor, effectiveMaxTokens, computeConfidence: withConfidence);
+    final decoderResult = _runDecoder(audioFeaturesTensor, effectiveMaxTokens, computeConfidence: getWordDetails);
     audioFeaturesTensor.release();
     final t4 = DateTime.now();
 
@@ -481,7 +493,7 @@ class WhisperTranscriber implements Transcriber {
 
     // Extract transcript and confidences from decoder result
     String transcript = decoderResult['transcript'] as String;
-    List<WordConfidence>? wordConfidences;
+    List<Word>? words;
 
     // Filter out BLANK_AUDIO token (always suppress for Whisper)
     if (transcript == '[BLANK_AUDIO]') {
@@ -489,15 +501,36 @@ class WhisperTranscriber implements Transcriber {
       transcript = '';
     }
 
-    // Build word confidences if available
-    if (withConfidence && transcript.isNotEmpty) {
+    // Build word objects if available
+    if (getWordDetails && transcript.isNotEmpty) {
       final confidences = decoderResult['confidences'] as List<double>?;
       if (confidences != null) {
-        final words = transcript.split(' ');
-        // Match words with confidences (they should be same length)
-        wordConfidences = List.generate(
-          min(words.length, confidences.length),
-          (i) => WordConfidence(word: words[i], confidence: confidences[i]),
+        final wordStrings = transcript.split(' ');
+
+        // TODO: KNOWN ISSUE - This naive pairing of confidences with words is incorrect!
+        // The 'confidences' list contains per-token confidence scores (before decoding),
+        // but 'wordStrings' are words after decoding and splitting by spaces.
+        // Since Whisper uses BPE/subword tokenization, tokens ≠ words:
+        // - Multiple tokens can form one word (e.g., "running" might be ["run", "##ning"])
+        // - One token might span multiple words
+        // - Token count != word count, so this 1:1 pairing is wrong
+        //
+        // Proper solution would be to:
+        // 1. Decode each token individually to track token-to-word boundaries
+        // 2. Aggregate token confidences per word (e.g., average or minimum)
+        // 3. Extract actual word timing from model if available (for start/end)
+        //
+        // For now, this provides approximate confidence values but should not be relied upon
+        // for precise word-level confidence scoring.
+
+        words = List.generate(
+          min(wordStrings.length, confidences.length),
+          (i) => Word(
+            word: wordStrings[i],
+            confidence: confidences[i],  // WARNING: May not correspond to this word!
+            start: -1.0,  // -1.0 indicates timing not available
+            end: -1.0,    // -1.0 indicates timing not available
+          ),
         );
       }
     }
@@ -506,16 +539,17 @@ class WhisperTranscriber implements Transcriber {
 
     return TranscriptionResult(
       text: transcript,
-      isFinal: true, // Non-streaming is always final
+      isFinal: segmentEnd,
       duration: duration,
       timestamp: DateTime.now(),
-      wordConfidences: wordConfidences,
+      words: words,
+      segments: (segmentEnd && transcript.isNotEmpty) ? [transcript] : null,
     );
   }
 
-  @Deprecated('Use transcribe(audio, withConfidence: true) instead')
+  @Deprecated('Use transcribe(audio, getWordDetails: true) instead')
   Future<TranscriptionResult> transcribeWithConfidence(Float32List audio) async {
-    return transcribe(audio, withConfidence: true);
+    return transcribe(audio, getWordDetails: true);
   }
 
   @override

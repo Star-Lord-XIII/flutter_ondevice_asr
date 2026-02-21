@@ -320,27 +320,22 @@ class StreamingTranscriber {
     }
 
     if (_speechBuffer.isNotEmpty) {
-      final bufferDuration = _speechBuffer.length / sampleRate;
       final audioData = Float32List.fromList(_speechBuffer);
 
-      final result = await transcriber.transcribe(audioData, withConfidence: false);
+      final result = await transcriber.transcribe(
+        audioData,
+        segmentEnd: true,
+        getWordDetails: false,
+      );
 
       // Only emit if we got actual text
       if (result.text.isNotEmpty) {
-        final streamingResult = TranscriptionResult(
-          text: result.text,
-          isFinal: true,
-          duration: bufferDuration,
-          timestamp: DateTime.now(),
-          wordConfidences: result.wordConfidences,
-        );
-
         if (!_transcriptionController.isClosed) {
-          _transcriptionController.add(streamingResult);
+          _transcriptionController.add(result);
         }
 
         if (verbose) {
-          debugPrint('[Streaming] Flush final (${bufferDuration.toStringAsFixed(2)}s): ${result.text}');
+          debugPrint('[Streaming] Flush final (${result.duration.toStringAsFixed(2)}s): ${result.text}');
         }
       }
       _speechBuffer.clear();
@@ -352,25 +347,21 @@ class StreamingTranscriber {
   /// Helper method to run transcription asynchronously without blocking audio processing
   Future<void> _transcribeAsync(Float32List audio, double duration, {required bool isFinal}) async {
     try {
-      final result = await transcriber.transcribe(audio, withConfidence: false);
+      final result = await transcriber.transcribe(
+        audio,
+        segmentEnd: isFinal,
+        getWordDetails: false,
+      );
 
       // Only emit if we got actual text
       if (result.text.isNotEmpty) {
-        final streamingResult = TranscriptionResult(
-          text: result.text,
-          isFinal: isFinal,
-          duration: duration,
-          timestamp: DateTime.now(),
-          wordConfidences: result.wordConfidences,
-        );
-
         if (!_transcriptionController.isClosed) {
-          _transcriptionController.add(streamingResult);
+          _transcriptionController.add(result);
         }
 
         if (verbose) {
-          final label = isFinal ? 'Final' : 'Partial';
-          debugPrint('[Streaming] $label (${duration.toStringAsFixed(2)}s): ${result.text}');
+          final label = result.isFinal ? 'Final' : 'Partial';
+          debugPrint('[Streaming] $label (${result.duration.toStringAsFixed(2)}s): ${result.text}');
         }
       }
     } catch (e) {
