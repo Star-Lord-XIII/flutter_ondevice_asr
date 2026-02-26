@@ -4,16 +4,10 @@ This script defines ONNX-native preprocessors that perform all mel spectrogram
 extraction entirely in ONNX Runtime, avoiding the need for custom STFT/matrix
 operations in Dart.
 
-To export to ONNX:
-    import onnx
-    from whisper_preprocessor import WhisperPreprocessor80
+Based on https://github.com/istupakov/onnx-asr
+Uses the onnx-asr preprocessor implementation.
 
-    model = WhisperPreprocessor80.to_model_proto()
-    onnx.save(model, "whisper_preprocessor_80.onnx")
-
-Source: Based on onnx-asr preprocessor implementation
-
-See XXXXXXXX
+TODO mention licencse and attribution for onnx-asr code
 """
 
 import numpy as np

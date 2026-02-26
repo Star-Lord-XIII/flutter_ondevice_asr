@@ -2,11 +2,8 @@
 # Build optimized assets for Flutter bundle from HuggingFace models
 #
 # This script:
-# 1. Exports Whisper models from HuggingFace to models/ (temp directory)
-# 2. Exports preprocessor to models/
-# 3. Merges preprocessor + encoder into super_encoder.onnx for each variant
-# 4. Copies super_encoder, decoders, and configs to assets/
-# 5. Removes standalone encoders from assets/
+# 1. Runs the Python conversion pipeline (convert_whisper_to_onnx.py)
+# 2. Copies the output to Flutter assets directory
 #
 # Usage:
 #   ./build_assets.sh [model_id]
@@ -43,18 +40,15 @@ fi
 
 source "$CONVERSION_DIR/venv/bin/activate"
 
-# Clean and create temp models directory
-echo "1. Creating temporary models directory..."
+# Clean temp models directory
+echo "1. Cleaning temporary models directory..."
 rm -rf "$MODELS_DIR"
-mkdir -p "$MODELS_DIR/whisper_tiny"
-mkdir -p "$MODELS_DIR/preprocessor"
 
-# Step 1: Export Whisper models from HuggingFace
+# Run the complete conversion pipeline
 echo ""
 echo "======================================================================="
-echo "Step 1: Exporting Whisper models from HuggingFace"
+echo "Running Whisper conversion pipeline"
 echo "======================================================================="
-echo "This will create 3 variants: default, default_int8, default_int8_optimum"
 echo ""
 
 python "$CONVERSION_DIR/convert_whisper_to_onnx.py" \
@@ -62,88 +56,43 @@ python "$CONVERSION_DIR/convert_whisper_to_onnx.py" \
     "$MODELS_DIR/whisper_tiny"
 
 echo ""
-echo "✓ Whisper models exported successfully!"
+echo "✓ Conversion pipeline completed!"
 
-# Step 2: Export preprocessor
+# Copy assets to Flutter bundle
 echo ""
 echo "======================================================================="
-echo "Step 2: Exporting preprocessor"
+echo "Copying models to Flutter assets"
 echo "======================================================================="
 
-cd "$CONVERSION_DIR"
-python export_whisper_preprocessor.py
-
-# Move to models directory
-mv whisper_preprocessor_80.onnx "$MODELS_DIR/preprocessor/"
-
-echo ""
-echo "✓ Preprocessor exported successfully!"
-
-# Step 3: Build assets for each variant
-echo ""
-echo "======================================================================="
-echo "Step 3: Building optimized assets"
-echo "======================================================================="
-
-# Function to build assets for one model variant
-build_variant() {
+# Function to copy assets for one model variant
+copy_variant() {
     local variant=$1
     echo ""
     echo "-------------------------------------------------------------------"
-    echo "Building: whisper_tiny/$variant"
+    echo "Copying: whisper_tiny/$variant"
     echo "-------------------------------------------------------------------"
 
     local source_dir="$MODELS_DIR/whisper_tiny/$variant"
     local target_dir="$ASSETS_DIR/whisper_tiny/$variant"
 
-    # Check source directory exists
-    if [ ! -d "$source_dir" ]; then
-        echo "⚠️  Skipping $variant - source directory not found"
-        return
-    fi
-
-    # Check encoder exists
-    if [ ! -f "$source_dir/encoder_model.onnx" ]; then
-        echo "⚠️  Skipping $variant - encoder_model.onnx not found"
-        return
-    fi
-
-    echo "  → Creating super encoder (preprocessor + encoder)..."
-    python "$CONVERSION_DIR/merge_preprocessor_encoder.py" \
-        --preprocessor "$MODELS_DIR/preprocessor/whisper_preprocessor_80.onnx" \
-        --encoder "$source_dir/encoder_model.onnx" \
-        --output "$CONVERSION_DIR/super_encoder_temp.onnx" \
-        > /dev/null
-
     echo "  → Creating target directory..."
     mkdir -p "$target_dir"
 
-    echo "  → Copying super encoder to assets..."
-    cp "$CONVERSION_DIR/super_encoder_temp.onnx" "$target_dir/super_encoder.onnx"
-
-    echo "  → Copying decoders to assets..."
+    echo "  → Copying models and configs to assets..."
+    cp "$source_dir/super_encoder.onnx" "$target_dir/"
     cp "$source_dir/decoder_model.onnx" "$target_dir/"
     cp "$source_dir/decoder_with_past_model.onnx" "$target_dir/"
-
-    echo "  → Copying config files to assets..."
     cp "$source_dir/config.json" "$target_dir/"
     cp "$source_dir/generation_config.json" "$target_dir/"
 
-    echo "  → Removing standalone encoder from assets (if exists)..."
-    rm -f "$target_dir/encoder_model.onnx"
-
-    echo "  → Cleaning up temporary files..."
-    rm -f "$CONVERSION_DIR/super_encoder_temp.onnx"
-
     echo ""
-    echo "  ✓ Built $variant successfully!"
+    echo "  ✓ Copied $variant successfully!"
     ls -lh "$target_dir" | grep -E "(super_encoder|decoder|config)" | awk '{print "      " $9 " (" $5 ")"}'
 }
 
-# Build all three variants
-build_variant "default"
-build_variant "default_int8"
-build_variant "default_int8_optimum"
+# Copy both variants
+copy_variant "default"
+copy_variant "default_int8"
 
 echo ""
 echo "======================================================================="
@@ -154,7 +103,6 @@ echo "Summary:"
 echo "  - Exported models from: $MODEL_ID"
 echo "  - Created super_encoder.onnx for each variant (preprocessor + encoder merged)"
 echo "  - Copied decoders and configs to assets/"
-echo "  - Removed standalone encoders from bundle"
 echo ""
 echo "Temporary files:"
 echo "  - Source models: $MODELS_DIR (can be deleted or kept for caching)"

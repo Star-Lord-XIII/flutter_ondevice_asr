@@ -1,7 +1,19 @@
-# straight forward conversion a HF Transformer Whisper model to ONNX with Optimum
-# creates full prec and int8 quant
-# example
-# python convert_whisper_to_onnx.py "openai/whisper-tiny" /tmp/onnx_tiny
+# Whisper model conversion pipeline for ONNX
+#
+# This script combines:
+# - HuggingFace Whisper to ONNX conversion
+# - Extraction of preprocessor
+# - Merge of encoder with preprocessor to super_encoder
+#
+# Creates full precision and int8 quantized variants
+#
+# Model input can be:
+# - HuggingFace model ID (e.g., "openai/whisper-tiny", "openai/whisper-base")
+# - Local path to a fine-tuned Whisper model (after HF model has been saved locally)
+#
+# Example usage:
+#   python convert_whisper_to_onnx.py "openai/whisper-tiny" /tmp/onnx_tiny
+#   python convert_whisper_to_onnx.py "./my-finetuned-whisper" /tmp/onnx_tiny
 
 
 from optimum.onnxruntime import ORTModelForSpeechSeq2Seq, ORTQuantizer
@@ -17,6 +29,12 @@ import os, shutil
 import time
 import argparse
 import shutil
+import onnx
+from onnx import compose
+from whisper_preprocessor import WhisperPreprocessor80
+
+# ONNX IR version to use for all models (for compatibility)
+IR_VERSION = 8
 
 
 def convert_to_onnx(original_model_path, default_onnx_folder):
@@ -27,6 +45,12 @@ def convert_to_onnx(original_model_path, default_onnx_folder):
         export=True,
     )
     ort_model.save_pretrained(default_onnx_folder)
+
+    for onnx_file in glob.glob(os.path.join(default_onnx_folder, "*.onnx")):
+        model = onnx.load(onnx_file)
+        model.ir_version = IR_VERSION
+        onnx.save(model, onnx_file)
+
     print(f"Model saved to {default_onnx_folder}")
 
 def copy_config_files(source_dir, target_dir):
@@ -93,7 +117,105 @@ def quantize_onnx_refined(onnx_input_dir, quantized_onnx_output_dir):
 
     copy_config_files(onnx_input_dir, quantized_onnx_output_dir)
 
-def main(original_model_path, onnx_output_folder):
+
+def export_preprocessor_80(output_path="whisper_preprocessor_80.onnx"):
+    """Export 80-band mel spectrogram preprocessor for Whisper.
+
+    Args:
+        output_path: Path where preprocessor ONNX model will be saved
+
+    Returns:
+        Path to the saved preprocessor model
+    """
+    print("Exporting WhisperPreprocessor80...")
+    model = WhisperPreprocessor80.to_model_proto()
+
+    # Set IR version to match encoder (onnxscript creates IR 10 by default otherwise)
+    model.ir_version = IR_VERSION
+
+    onnx.save(model, output_path)
+    print(f"✓ Saved to {output_path} (IR version: {model.ir_version}, Opset: {model.opset_import[0].version})")
+    return output_path
+
+
+def make_super_encoder(preprocessor_path, encoder_path, output_path):
+    """Merge preprocessor and encoder ONNX models into a single "super encoder".
+
+    Uses onnx.compose.merge_models to combine the models by connecting:
+    - Preprocessor output 'features' -> Encoder input 'input_features'
+
+    The merged model will:
+    - Input: raw audio waveform (Float32[batch, samples])
+    - Output: encoder hidden states (Float32[batch, seq_len, hidden_dim])
+
+    Args:
+        preprocessor_path: Path to preprocessor ONNX model
+        encoder_path: Path to encoder ONNX model
+        output_path: Path where super encoder will be saved
+
+    Returns:
+        The merged ONNX model
+    """
+    print(f"Loading preprocessor from {preprocessor_path}...")
+    preprocessor = onnx.load(preprocessor_path)
+
+    print(f"Loading encoder from {encoder_path}...")
+    encoder = onnx.load(encoder_path)
+
+    print("\nPreprocessor info:")
+    print(f"  Inputs: {[i.name for i in preprocessor.graph.input]}")
+    print(f"  Outputs: {[o.name for o in preprocessor.graph.output]}")
+
+    print("\nEncoder info:")
+    print(f"  Inputs: {[i.name for i in encoder.graph.input]}")
+    print(f"  Outputs: {[o.name for o in encoder.graph.output]}")
+
+    # Check IR version compatibility
+    if preprocessor.ir_version != encoder.ir_version:
+        print(f"\n⚠ IR version mismatch: preprocessor={preprocessor.ir_version}, encoder={encoder.ir_version}")
+        print(f"  Downgrading preprocessor to IR version {encoder.ir_version}...")
+        preprocessor.ir_version = encoder.ir_version
+
+    # Map preprocessor outputs to encoder inputs
+    # Preprocessor outputs 'features' (mel spectrogram)
+    # Encoder expects 'input_features'
+    io_map = [("features", "input_features")]
+
+    print(f"\nMerging with io_map: {io_map}")
+
+    # Use ONNX compose to merge the models
+    merged_model = compose.merge_models(
+        preprocessor,
+        encoder,
+        io_map=io_map
+    )
+
+    # Validate the merged model
+    print("\nValidating merged model...")
+    try:
+        onnx.checker.check_model(merged_model)
+        print("✓ Model validation passed")
+    except Exception as e:
+        print(f"⚠ Validation warning: {e}")
+        print("  (This may be OK - some validators are strict)")
+
+    # Save merged model
+    print(f"\nSaving merged model to {output_path}...")
+    onnx.save(merged_model, output_path)
+
+    # Print merged model info
+    model_size_mb = len(merged_model.SerializeToString()) / (1024 * 1024)
+    print(f"\n✓ Merged model saved successfully!")
+    print(f"  Size: {model_size_mb:.2f} MB")
+    print(f"  IR Version: {merged_model.ir_version}")
+    print(f"  Opset: {merged_model.opset_import[0].version}")
+    print(f"  Inputs: {[i.name for i in merged_model.graph.input]}")
+    print(f"  Outputs: {[o.name for o in merged_model.graph.output]}")
+
+    return merged_model
+
+
+def run_conversion(original_model_path, onnx_output_folder):
     """
     Convert a HuggingFace Whisper model to ONNX format with optimization and quantization.
 
@@ -103,10 +225,13 @@ def main(original_model_path, onnx_output_folder):
     """
     default_onnx_folder = os.path.join(onnx_output_folder, 'default')
     default_int8_onnx_folder = os.path.join(onnx_output_folder, 'default_int8')
-    default_int8_onnx_folder_v2 = os.path.join(onnx_output_folder, 'default_int8_optimum')
+    # TODO not needed anymore
+    # default_int8_onnx_folder_v2 = os.path.join(onnx_output_folder, 'default_int8_optimum')
+    preprocessor_folder = os.path.join(onnx_output_folder, 'preprocessor')
 
     os.makedirs(default_onnx_folder, exist_ok=True)
     os.makedirs(default_int8_onnx_folder, exist_ok=True)
+    os.makedirs(preprocessor_folder, exist_ok=True)
 
     # Convert to ONNX
     convert_to_onnx(original_model_path, default_onnx_folder)
@@ -114,8 +239,38 @@ def main(original_model_path, onnx_output_folder):
     # Quantize both default and optimized versions
     quantize_onnx(default_onnx_folder, default_int8_onnx_folder)
 
-    # new quantize method
-    quantize_onnx_refined(default_onnx_folder, default_int8_onnx_folder_v2)
+    # # new quantize method
+    # quantize_onnx_refined(default_onnx_folder, default_int8_onnx_folder_v2)
+
+    # Export preprocessor
+    print("\n" + "=" * 70)
+    print("Exporting preprocessor")
+    print("=" * 70)
+    preprocessor_path = os.path.join(preprocessor_folder, 'whisper_preprocessor_80.onnx')
+    export_preprocessor_80(preprocessor_path)
+
+    # Create super encoders for each variant
+    print("\n" + "=" * 70)
+    print("Creating super encoders")
+    print("=" * 70)
+
+    variants = [
+        ('default', default_onnx_folder),
+        ('default_int8', default_int8_onnx_folder),
+    ]
+
+    for variant_name, variant_folder in variants:
+        encoder_path = os.path.join(variant_folder, 'encoder_model.onnx')
+        if os.path.exists(encoder_path):
+            print(f"\n--- Creating super encoder for {variant_name} ---")
+            super_encoder_path = os.path.join(variant_folder, 'super_encoder.onnx')
+            make_super_encoder(preprocessor_path, encoder_path, super_encoder_path)
+
+            # Remove standalone encoder since we now have super_encoder
+            print(f"Removing standalone encoder_model.onnx from {variant_name}...")
+            os.remove(encoder_path)
+        else:
+            print(f"\n⚠ Skipping {variant_name} - encoder_model.onnx not found")
 
     print(f"\n✓ Conversion complete! Models saved to {onnx_output_folder}")
 
@@ -127,4 +282,4 @@ if __name__ == '__main__':
     parser.add_argument('onnx_output_folder', type=str, help='Base folder where onnx model will be written to (each in subfolders)')
     args = parser.parse_args()
 
-    main(args.original_model_path, args.onnx_output_folder)    
+    run_conversion(args.original_model_path, args.onnx_output_folder)    
