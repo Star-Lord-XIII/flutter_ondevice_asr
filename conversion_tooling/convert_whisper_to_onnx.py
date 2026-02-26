@@ -215,13 +215,32 @@ def make_super_encoder(preprocessor_path, encoder_path, output_path):
     return merged_model
 
 
-def run_conversion(original_model_path, onnx_output_folder):
+def get_expected_files():
+    """
+    Get the list of expected files in each variant output folder.
+
+    Returns:
+        list: List of expected filenames after conversion
+    """
+    return [
+        "super_encoder.onnx",
+        "decoder_model.onnx",
+        "decoder_with_past_model.onnx",
+        "config.json",
+        "generation_config.json"
+    ]
+
+
+def run_conversion(original_model_path: str, onnx_output_folder: str) -> list[str]:
     """
     Convert a HuggingFace Whisper model to ONNX format with optimization and quantization.
 
     Args:
         original_model_path: Path to the Whisper model (HuggingFace Hub ID or local path)
         onnx_output_folder: Output folder for ONNX models
+
+    Returns:
+        list[str]: List of paths to the generated variant folders [default_folder, int8_folder]
     """
     default_onnx_folder = os.path.join(onnx_output_folder, 'default')
     default_int8_onnx_folder = os.path.join(onnx_output_folder, 'default_int8')
@@ -261,18 +280,40 @@ def run_conversion(original_model_path, onnx_output_folder):
 
     for variant_name, variant_folder in variants:
         encoder_path = os.path.join(variant_folder, 'encoder_model.onnx')
-        if os.path.exists(encoder_path):
-            print(f"\n--- Creating super encoder for {variant_name} ---")
-            super_encoder_path = os.path.join(variant_folder, 'super_encoder.onnx')
-            make_super_encoder(preprocessor_path, encoder_path, super_encoder_path)
+        print(f"\n--- Creating super encoder for {variant_name} ---")
+        super_encoder_path = os.path.join(variant_folder, 'super_encoder.onnx')
+        make_super_encoder(preprocessor_path, encoder_path, super_encoder_path)
 
-            # Remove standalone encoder since we now have super_encoder
-            print(f"Removing standalone encoder_model.onnx from {variant_name}...")
-            os.remove(encoder_path)
-        else:
-            print(f"\n⚠ Skipping {variant_name} - encoder_model.onnx not found")
+        # Remove standalone encoder since we now have super_encoder
+        print(f"Removing standalone encoder_model.onnx from {variant_name}...")
+        os.remove(encoder_path)
+
+    # Validate all expected files are present in each variant
+    print("\n" + "=" * 70)
+    print("Validating output files")
+    print("=" * 70)
+
+    expected_files = get_expected_files()
+
+    for variant_name, variant_folder in variants:
+        print(f"\nChecking {variant_name}...")
+        missing_files = []
+        for filename in expected_files:
+            filepath = os.path.join(variant_folder, filename)
+            if os.path.exists(filepath):
+                print(f"  ✓ {filename}")
+            else:
+                print(f"  ✗ {filename} - MISSING")
+                missing_files.append(filename)
+
+        if missing_files:
+            raise FileNotFoundError(
+                f"Conversion incomplete for {variant_name}. Missing files: {', '.join(missing_files)}"
+            )
 
     print(f"\n✓ Conversion complete! Models saved to {onnx_output_folder}")
+
+    return [default_onnx_folder, default_int8_onnx_folder]
 
 
 if __name__ == '__main__':
