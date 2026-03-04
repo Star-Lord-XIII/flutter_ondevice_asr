@@ -1,15 +1,17 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_ondevice_asr/audio.dart';
-import 'package:flutter_ondevice_asr/onnx_config.dart';
-import 'package:flutter_ondevice_asr/transcriber.dart';
-import 'package:flutter_ondevice_asr/transcription_result.dart';
-import 'package:flutter_ondevice_asr/utils.dart';
-import 'package:flutter_ondevice_asr/models/whisper/whisper_tokenizer.dart';
 import 'package:onnxruntime_v2/onnxruntime_v2.dart';
+
+import '../../audio.dart';
+import '../../onnx_config.dart';
+import '../../transcriber.dart';
+import '../../transcription_result.dart';
+import '../../utils.dart';
+import 'whisper_tokenizer.dart';
 
 /// Whisper ASR transcriber implementation.
 class WhisperTranscriber implements Transcriber {
@@ -112,22 +114,23 @@ class WhisperTranscriber implements Transcriber {
     // Load Super Encoder (combined preprocessor + encoder)
     debugPrint("Loading Super Encoder Model...");
     final superEncoderPath = '$modelDirectory/super_encoder.onnx';
-    final superEncoderBytes = await _loadBytes(superEncoderPath);
-    superEncoderSession = onnxConfig.createSession(superEncoderBytes);
+    final superEncoderBytesFuture = _loadBytes(superEncoderPath);
     debugPrint("Super Encoder loaded.");
 
     // Load decoder and decoder with past model
     debugPrint("Loading Decoder Model...");
     final decoderPath = '$modelDirectory/decoder_model.onnx';
-    final decoderBytes = await _loadBytes(decoderPath);
-    decoderSession = onnxConfig.createSession(decoderBytes);
+    final decoderBytesFuture = _loadBytes(decoderPath);
 
     final decoderWithPastPath = '$modelDirectory/decoder_with_past_model.onnx';
-    final decoderWithPastBytes = await _loadBytes(decoderWithPastPath);
-    decoderWithPastSession = onnxConfig.createSession(decoderWithPastBytes);
-    debugPrint("Decoder loaded.");
+    final decoderWithPastBytesFuture = _loadBytes(decoderWithPastPath);
 
-    debugPrint(">> All models loaded successfully! <<");
+    final loadedModelBytes = await Future.wait([superEncoderBytesFuture, decoderBytesFuture, decoderWithPastBytesFuture]);
+    superEncoderSession = onnxConfig.createSession(loadedModelBytes[0]);
+    decoderSession = onnxConfig.createSession(loadedModelBytes[1]);
+    decoderWithPastSession = onnxConfig.createSession(loadedModelBytes[2]);
+
+    debugPrint("Model loaded successfully!");
   }
 
   Future<void> _loadControlTokens() async {
