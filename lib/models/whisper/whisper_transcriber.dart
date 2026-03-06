@@ -114,18 +114,37 @@ class WhisperTranscriber implements Transcriber {
     // Load Super Encoder (combined preprocessor + encoder)
     debugPrint("Loading Super Encoder Model...");
     final superEncoderPath = '$modelDirectory/super_encoder.onnx';
+    if (!File(superEncoderPath).existsSync()) {
+      throw Exception(
+        'super_encoder.onnx file is missing in the model directory at `$modelDirectory`',
+      );
+    }
     final superEncoderBytesFuture = _loadBytes(superEncoderPath);
     debugPrint("Super Encoder loaded.");
 
     // Load decoder and decoder with past model
     debugPrint("Loading Decoder Model...");
     final decoderPath = '$modelDirectory/decoder_model.onnx';
+    if (!File(decoderPath).existsSync()) {
+      throw Exception(
+        'decoder_model.onnx file is missing in the model directory at `$modelDirectory`',
+      );
+    }
     final decoderBytesFuture = _loadBytes(decoderPath);
 
     final decoderWithPastPath = '$modelDirectory/decoder_with_past_model.onnx';
+    if (!File(decoderWithPastPath).existsSync()) {
+      throw Exception(
+        'decoder_with_past_model.onnx file is missing in the model directory at `$modelDirectory`',
+      );
+    }
     final decoderWithPastBytesFuture = _loadBytes(decoderWithPastPath);
 
-    final loadedModelBytes = await Future.wait([superEncoderBytesFuture, decoderBytesFuture, decoderWithPastBytesFuture]);
+    final loadedModelBytes = await Future.wait([
+      superEncoderBytesFuture,
+      decoderBytesFuture,
+      decoderWithPastBytesFuture,
+    ]);
     superEncoderSession = onnxConfig.createSession(loadedModelBytes[0]);
     decoderSession = onnxConfig.createSession(loadedModelBytes[1]);
     decoderWithPastSession = onnxConfig.createSession(loadedModelBytes[2]);
