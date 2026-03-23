@@ -24,8 +24,9 @@ from onnxruntime.quantization import QuantType, quantize_dynamic
 import glob
 from pathlib import Path
 
-from transformers import WhisperProcessor
+from transformers import WhisperProcessor, WhisperTokenizer
 import os, shutil
+import json
 import time
 import argparse
 import shutil
@@ -215,6 +216,29 @@ def make_super_encoder(preprocessor_path, encoder_path, output_path):
     return merged_model
 
 
+def export_vocab(model_path: str, output_path: str) -> str:
+    """Export tokenizer vocab to a JSON file.
+
+    Args:
+        model_path: HuggingFace model ID or local path
+        output_path: Path where vocab.json will be saved
+
+    Returns:
+        Path to the saved vocab file
+    """
+    print(f"Exporting vocab from {model_path}...")
+    tokenizer = WhisperTokenizer.from_pretrained(model_path)
+
+    # The vocab is a dict mapping token strings to IDs
+    vocab = tokenizer.get_vocab()
+
+    with open(output_path, 'w', encoding='utf-8') as f:
+        json.dump(vocab, f, ensure_ascii=False, indent=2)
+
+    print(f"✓ Saved vocab ({len(vocab)} tokens) to {output_path}")
+    return output_path
+
+
 def get_expected_files():
     """
     Get the list of expected files in each variant output folder.
@@ -227,7 +251,8 @@ def get_expected_files():
         "decoder_model.onnx",
         "decoder_with_past_model.onnx",
         "config.json",
-        "generation_config.json"
+        "generation_config.json",
+        "vocab.json"
     ]
 
 
@@ -287,6 +312,15 @@ def run_conversion(original_model_path: str, onnx_output_folder: str) -> list[st
         # Remove standalone encoder since we now have super_encoder
         print(f"Removing standalone encoder_model.onnx from {variant_name}...")
         os.remove(encoder_path)
+
+    # Export vocab to each variant folder (so each folder is self-contained)
+    print("\n" + "=" * 70)
+    print("Exporting vocab")
+    print("=" * 70)
+
+    for variant_name, variant_folder in variants:
+        vocab_path = os.path.join(variant_folder, 'vocab.json')
+        export_vocab(original_model_path, vocab_path)
 
     # Validate all expected files are present in each variant
     print("\n" + "=" * 70)

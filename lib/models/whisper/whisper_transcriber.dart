@@ -100,10 +100,9 @@ class WhisperTranscriber implements Transcriber {
   @override
   Future<void> loadModels() async {
 
-    // Load tokenizer vocab based on model type
-    final vocabFileName = language != null ? 'vocab_multilingual.json' : 'vocab_en.json';
-    final vocabPath = '${isRunningInTestEnvironment() ? '' : 'packages/flutter_ondevice_asr/'}assets/transcribers/whisper/tokenizer/$vocabFileName';
-    debugPrint("Loading vocab: $vocabFileName (language: $language)");
+    // Load tokenizer vocab from model directory
+    final vocabPath = '$modelDirectory/vocab.json';
+    debugPrint("Loading vocab from: $vocabPath");
     await WhisperTokenizer.instance.loadVocab(path: vocabPath);
 
     // Load control tokens from generation config to get token IDs

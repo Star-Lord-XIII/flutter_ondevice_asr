@@ -9,7 +9,7 @@ void main() {
       // Reset singleton for each test group
       WhisperTokenizer.instance.reset();
       await WhisperTokenizer.instance.loadVocab(
-        path: 'assets/transcribers/whisper/tokenizer/vocab_multilingual.json',
+        path: 'assets/transcribers/whisper/models/whisper_tiny/default_int8/vocab.json',
       );
     });
 
@@ -79,36 +79,4 @@ void main() {
     });
   });
 
-  group('WhisperTokenizer - English-only', () {
-    setUp(() async {
-      // Reset and load English-only vocab
-      WhisperTokenizer.instance.reset();
-      await WhisperTokenizer.instance.loadVocab(
-        path: 'assets/transcribers/whisper/tokenizer/vocab_en.json',
-      );
-    });
-
-    test('decodes <|endoftext|> in English-only vocab', () {
-      // English-only vocab has <|endoftext|> at 50256 (not 50257 like multilingual)
-      final decoded = WhisperTokenizer.instance.decode(
-        [50256],
-        skipSpecialTokens: false,
-      );
-
-      expect(decoded, contains('<|endoftext|>'));
-    });
-
-    test('decodes English text correctly', () {
-      // English-only vocab uses DIFFERENT token IDs than multilingual!
-      // 843=" And", 370=" so" (same as multilingual), 452=" my" (same)
-      final decoded = WhisperTokenizer.instance.decode(
-        [843, 523, 616], // " And" " so" " my"
-        skipSpecialTokens: true,
-      );
-
-      expect(decoded, contains('And'));
-      expect(decoded, contains('so'));
-      expect(decoded, contains('my'));
-    });
-  });
 }

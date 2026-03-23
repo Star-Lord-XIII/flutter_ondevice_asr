@@ -14,12 +14,11 @@ class WhisperTokenizer {
     return _instance!;
   }
 
-  /// Load vocabulary from assets
-  Future<void> loadVocab({String? path}) async {
+  /// Load vocabulary from the given path
+  Future<void> loadVocab({required String path}) async {
     if (_idToToken != null) return;
 
-    final vocabPath = path ?? 'packages/flutter_ondevice_asr/assets/transcribers/whisper/tokenizer/vocab_multilingual.json';
-    final vocabJson = await rootBundle.loadString(vocabPath);
+    final vocabJson = await rootBundle.loadString(path);
     final vocab = jsonDecode(vocabJson) as Map<String, dynamic>;
 
     _idToToken = {};

@@ -34,8 +34,7 @@ This library uses a **model-agnostic architecture** that separates transcription
 - Streaming logic: VAD-based segmentation and partial transcription
 
 **Assets:**
-- `assets/transcribers/whisper/models/`: Whisper ONNX model files (super_encoder, decoders, configs)
-- `assets/transcribers/whisper/tokenizer/`: Whisper tokenizer vocabulary (multilingual and English-only)
+- `assets/transcribers/whisper/models/`: Whisper ONNX model files (super_encoder, decoders, configs, vocab)
 - `assets/vad/silero_vad/`: Voice activity detection model
 - `assets/audio/`: Test audio samples
 

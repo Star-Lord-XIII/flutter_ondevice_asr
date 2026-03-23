@@ -84,10 +84,11 @@ copy_variant() {
     cp "$source_dir/decoder_with_past_model.onnx" "$target_dir/"
     cp "$source_dir/config.json" "$target_dir/"
     cp "$source_dir/generation_config.json" "$target_dir/"
+    cp "$source_dir/vocab.json" "$target_dir/"
 
     echo ""
     echo "  ✓ Copied $variant successfully!"
-    ls -lh "$target_dir" | grep -E "(super_encoder|decoder|config)" | awk '{print "      " $9 " (" $5 ")"}'
+    ls -lh "$target_dir" | grep -E "(super_encoder|decoder|config|vocab)" | awk '{print "      " $9 " (" $5 ")"}'
 }
 
 # Copy both variants
