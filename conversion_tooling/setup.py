@@ -37,9 +37,9 @@ setup(
     ],
     install_requires=[
         # Pin version to match Euphonia app training worker (Dockerfile.worker)
-        # which uses torch==2.10.0 with CUDA 12.6 wheels.
-        "torch==2.10.0",
-        "torchaudio==2.10.0",
+        # which uses torch==2.9.1 with CUDA 12.2 runtime.
+        "torch==2.9.1",
+        "torchaudio==2.9.1",
         # HuggingFace ecosystem
         "transformers>=4.45.0,<4.58.0",
         "optimum[onnxruntime]>=1.19.0,<2.2.0",
