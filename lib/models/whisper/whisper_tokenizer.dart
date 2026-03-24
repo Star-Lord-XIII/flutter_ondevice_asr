@@ -1,5 +1,6 @@
 // Tokenizer for whisper models (en-only and multilingual)
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/services.dart';
 
 class WhisperTokenizer {
@@ -18,7 +19,14 @@ class WhisperTokenizer {
   Future<void> loadVocab({required String path}) async {
     if (_idToToken != null) return;
 
-    final vocabJson = await rootBundle.loadString(path);
+    final vocabFile = File(path);
+    String? vocabJson;
+    if (!vocabFile.existsSync()) {
+      String vocabPath = 'packages/flutter_ondevice_asr/assets/transcribers/whisper/tokenizer/vocab_multilingual.json';
+      vocabJson = await rootBundle.loadString(vocabPath);
+    } else {
+      vocabJson = vocabFile.readAsStringSync();
+    }
     final vocab = jsonDecode(vocabJson) as Map<String, dynamic>;
 
     _idToToken = {};
