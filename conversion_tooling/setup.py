@@ -36,12 +36,17 @@ setup(
         "convert_whisper_to_onnx",
     ],
     install_requires=[
-        "onnx>=1.15.0",
-        "onnxscript>=0.1.0",
-        "torchaudio>=2.0.0",
-        "optimum[onnxruntime]>=1.16.0",
-        "transformers>=4.30.0",
-        "torch>=2.0.0",
+        # Pin version to match Euphonia app training worker (Dockerfile.worker)
+        # which uses torch==2.10.0 with CUDA 12.6 wheels.
+        "torch==2.10.0",
+        "torchaudio==2.10.0",
+        # HuggingFace ecosystem
+        "transformers>=4.45.0,<4.58.0",
+        "optimum[onnxruntime]>=1.19.0,<2.2.0",
+        # ONNX tooling
+        "onnx>=1.16.0,<1.21.0",
+        "onnxscript>=0.5.0,<0.7.0",
+        "onnxruntime>=1.19.0",
     ],
     python_requires=">=3.9",
 )

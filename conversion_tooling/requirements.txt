@@ -1,6 +1,18 @@
-optimum[onnxruntime]
-transformers
-torch
-onnx
-onnxscript
-torchaudio
+# Whisper ONNX Conversion Tooling Dependencies
+#
+# IMPORTANT: torch and torchaudio versions must match the training worker environment.
+# The training worker (Dockerfile.worker) uses torch==2.10.0 with CUDA 12.6 wheels.
+# Unpinned versions can pull in incompatible CUDA builds causing .so load failures.
+
+# Core dependencies - pinned for CUDA 12.6 compatibility
+torch==2.10.0
+torchaudio==2.10.0
+
+# HuggingFace ecosystem
+transformers>=4.45.0,<4.58.0
+optimum[onnxruntime]>=1.19.0,<2.2.0
+
+# ONNX tooling
+onnx>=1.16.0,<1.21.0
+onnxscript>=0.5.0,<0.7.0
+onnxruntime>=1.19.0
