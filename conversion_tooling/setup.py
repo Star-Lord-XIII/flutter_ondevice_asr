@@ -36,12 +36,13 @@ setup(
         "convert_whisper_to_onnx",
     ],
     install_requires=[
-        # Pin version to match Euphonia app training worker (Dockerfile.worker)
-        # which uses torch==2.9.1 with CUDA 12.2 runtime.
-        "torch==2.9.1",
-        "torchaudio==2.9.1",
-        # HuggingFace ecosystem
-        "transformers>=4.45.0,<4.58.0",
+        # Pin versions for compatibility with transformers 4.46.3
+        # Note: torch 2.5.1 is no longer on PyPI, using oldest available (2.6.0)
+        # transformers 4.57+ has a regression affecting encoder-only training.
+        "torch==2.6.0",
+        "torchaudio==2.6.0",
+        # HuggingFace ecosystem - pinned to known working version
+        "transformers==4.46.3",
         "optimum[onnxruntime]>=1.19.0,<2.2.0",
         # ONNX tooling
         "onnx>=1.16.0,<1.21.0",

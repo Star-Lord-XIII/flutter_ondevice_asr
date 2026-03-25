@@ -1,15 +1,16 @@
 # Whisper ONNX Conversion Tooling Dependencies
 #
-# IMPORTANT: torch and torchaudio versions must match the training worker environment.
-# The training worker (Dockerfile.worker) uses torch==2.9.1 with CUDA 12.2 runtime.
-# Unpinned versions can pull in incompatible CUDA builds causing .so load failures.
+# IMPORTANT: These versions are pinned to match the known working experiment setup.
+# transformers 4.57+ has a regression affecting Whisper encoder-only training.
+# See: backend/training/experiments/training_performance_investigation.md
 
-# Core dependencies - pinned for CUDA 12.2 compatibility
-torch==2.9.1
-torchaudio==2.9.1
+# Core dependencies - use oldest available versions
+# Note: torch 2.5.1 is no longer on PyPI, 2.6.0 is oldest available
+torch==2.6.0
+torchaudio==2.6.0
 
-# HuggingFace ecosystem
-transformers>=4.45.0,<4.58.0
+# HuggingFace ecosystem - pinned to known working version
+transformers==4.46.3
 optimum[onnxruntime]>=1.19.0,<2.2.0
 
 # ONNX tooling
