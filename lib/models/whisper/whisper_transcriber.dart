@@ -68,15 +68,9 @@ class WhisperTranscriber implements Transcriber {
     }
   }
 
-
-  /// Helper to determine if path is external (absolute file path) vs bundled asset
-  bool _isExternalPath(String path) {
-    return path.startsWith('/') || path.startsWith('file://');
-  }
-
   /// Load bytes from either external file or bundled asset
   Future<Uint8List> _loadBytes(String path) async {
-    if (_isExternalPath(path)) {
+    if (path.startsWith(modelDirectory)) {
       debugPrint("Loading from external file: $path");
       return await File(path).readAsBytes();
     } else {
@@ -89,7 +83,7 @@ class WhisperTranscriber implements Transcriber {
 
   /// Load string from either external file or bundled asset
   Future<String> _loadString(String path) async {
-    if (_isExternalPath(path)) {
+    if (path.startsWith(modelDirectory)) {
       return await File(path).readAsString();
     } else {
       final assetPath = '${isRunningInTestEnvironment() ? '' : 'packages/flutter_ondevice_asr/'}$path';
