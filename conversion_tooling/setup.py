@@ -41,7 +41,7 @@ setup(
         # transformers 4.57+ has a regression affecting encoder-only training.
         "torch==2.6.0",
         "torchaudio==2.6.0",
-        # HuggingFace ecosystem - pinned to known working version
+        # HuggingFace ecosystem - pinned to known well working version aligned with training environment
         "transformers==4.46.3",
         "optimum[onnxruntime]>=1.19.0,<2.2.0",
         # ONNX tooling
