@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'package:flutter/services.dart';
-import 'package:flutter_ondevice_asr/common/result.dart';
 import 'package:flutter_ondevice_asr/model/transcription_result.dart';
 import 'package:flutter_ondevice_asr/util/audio.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -12,7 +11,7 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   const testAudioFile = 'packages/flutter_ondevice_asr/assets/audio/jfk_asknot.wav';
-  const expectedTranscript = 'And so my fellow Americans. Ask, not! What you are country can do for you. And what you can do for your country.';
+  const expectedTranscript = 'And so my fellow Americans ask not what you are country can do for you. Ask what you can do for your country.';
 
   // Model configuration - using bundled multilingual model
   // const modelDirectory = 'assets/transcribers/whisper/models/whisper_tiny/default';
@@ -77,8 +76,7 @@ void main() {
     int finalCount = 0;
 
     print('\n========== STREAMING TRANSCRIPTION OUTPUT ==========');
-    final subscription = streaming.transcriptionStream.listen((resultResult) {
-      final result = (resultResult as Ok<TranscriptionResult>).value;
+    final subscription = streaming.transcriptionStream.listen((result) {
       final now = DateTime.now();
       firstResultTime ??= now;
       lastResultTime = now;

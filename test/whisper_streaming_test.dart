@@ -4,11 +4,17 @@ import 'package:flutter_ondevice_asr/model/transcription_result.dart';
 import 'package:flutter_ondevice_asr/util/audio.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'test_utils.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  const testAudioFile = 'assets/audio/jfk_asknot.wav';
-  const modelDirectory = 'assets/transcribers/whisper/models/whisper_tiny/default_int8';
+  final testAudioFile = toAbsolutePath('assets/audio/jfk_asknot.wav');
+  final modelDirectory = toAbsolutePath('assets/transcribers/whisper/models/whisper_tiny/default_int8');
+
+  debugPrint('Unit test paths (absolute, filesystem-based):');
+  debugPrint('  modelDirectory: $modelDirectory');
+  debugPrint('  testAudioFile: $testAudioFile');
   const language = 'en';
   const chunkDurationMs = 100;
   const sampleRate = 16000;

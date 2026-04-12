@@ -6,16 +6,20 @@ import 'package:flutter_ondevice_asr/models/whisper/whisper_transcriber.dart';
 import 'package:flutter_ondevice_asr/util/audio.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'test_utils.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  // Model configuration - using bundled multilingual model
-  // const modelDirectory = 'assets/transcribers/whisper/models/whisper_tiny/default';
-  const modelDirectory = 'assets/transcribers/whisper/models/whisper_tiny/default_int8';
-  // const modelDirectory = '/Users/chintanghate/Projects/ktomanek/flutter_ondevice_asr/assets/transcribers/whisper/models/whisper_tiny/default_int8';
+  // Model configuration - convert to absolute paths for filesystem access
+  final modelDirectory = toAbsolutePath('assets/transcribers/whisper/models/whisper_tiny/default_int8');
   const language = 'en';
 
-  const testAudioFile = 'assets/audio/jfk_asknot.wav';
+  final testAudioFile = toAbsolutePath('assets/audio/jfk_asknot.wav');
+
+  debugPrint('Unit test paths (absolute, filesystem-based):');
+  debugPrint('  modelDirectory: $modelDirectory');
+  debugPrint('  testAudioFile: $testAudioFile');
   const expectedTranscript =
       'And so my fellow Americans ask not what your country can do for you, ask what you can do for your country.';
 

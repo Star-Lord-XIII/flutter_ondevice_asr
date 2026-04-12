@@ -1,9 +1,17 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_ondevice_asr/common/result.dart';
 import 'package:flutter_ondevice_asr/models/whisper/whisper_tokenizer.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'test_utils.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  final vocabPath = toAbsolutePath('assets/transcribers/whisper/models/whisper_tiny/default_int8/vocab.json');
+
+  debugPrint('Unit test paths (absolute, filesystem-based):');
+  debugPrint('  vocabPath: $vocabPath');
 
   group(
     'WhisperTokenizer - Multilingual',
@@ -12,7 +20,7 @@ void main() {
       setUp(() async {
         // Reset singleton for each test group
         final result = await tokenizer.loadVocab(
-          path: 'assets/transcribers/whisper/models/whisper_tiny/default_int8/vocab.json',
+          path: vocabPath,
         );
 
         expect(result is Ok, true);

@@ -1,9 +1,7 @@
 import 'dart:convert';
-import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_ondevice_asr/util/utils.dart';
 import 'package:logging/logging.dart';
 import 'package:onnxruntime_v2/onnxruntime_v2.dart';
@@ -423,17 +421,16 @@ class WhisperTranscriber implements Transcriber {
     required OnnxConfig onnxConfig,
   }) async {
     _logger.finer('Load super encoder');
-    final encoderFile = File('$modelPath/super_encoder.onnx');
-    if (!encoderFile.existsSync()) {
+    final encoderPath = '$modelPath/super_encoder.onnx';
+    try {
+      final encoderBytes = await Utils.loadBytes(encoderPath);
+      superEncoderSession = onnxConfig.createSession(encoderBytes);
+      return Result.ok(null);
+    } catch (e) {
       return Result.error(
-        Exception(
-          'super_encoder.onnx file not found in model directory at <$modelPath>',
-        ),
+        Exception('Failed to load super_encoder.onnx from <$modelPath>: $e'),
       );
     }
-    final encoderBytes = await _loadBytes(encoderFile.path);
-    superEncoderSession = onnxConfig.createSession(encoderBytes);
-    return Result.ok(null);
   }
 
   Future<Result<void>> _loadDecoder({
@@ -441,17 +438,16 @@ class WhisperTranscriber implements Transcriber {
     required OnnxConfig onnxConfig,
   }) async {
     _logger.finer('Load decoder');
-    final decoderFile = File('$modelPath/decoder_model.onnx');
-    if (!decoderFile.existsSync()) {
+    final decoderPath = '$modelPath/decoder_model.onnx';
+    try {
+      final decoderBytes = await Utils.loadBytes(decoderPath);
+      decoderSession = onnxConfig.createSession(decoderBytes);
+      return Result.ok(null);
+    } catch (e) {
       return Result.error(
-        Exception(
-          'decoder_model.onnx file not found in model directory at <$modelPath>',
-        ),
+        Exception('Failed to load decoder_model.onnx from <$modelPath>: $e'),
       );
     }
-    final decoderBytes = await _loadBytes(decoderFile.path);
-    decoderSession = onnxConfig.createSession(decoderBytes);
-    return Result.ok(null);
   }
 
   Future<Result<void>> _loadDecoderWithPast({
@@ -459,30 +455,15 @@ class WhisperTranscriber implements Transcriber {
     required OnnxConfig onnxConfig,
   }) async {
     _logger.finer('Load decoder with past');
-    final decoderWithPastFile = File('$modelPath/decoder_with_past_model.onnx');
-    if (!decoderWithPastFile.existsSync()) {
+    final decoderWithPastPath = '$modelPath/decoder_with_past_model.onnx';
+    try {
+      final decoderWithPastBytes = await Utils.loadBytes(decoderWithPastPath);
+      decoderWithPastSession = onnxConfig.createSession(decoderWithPastBytes);
+      return Result.ok(null);
+    } catch (e) {
       return Result.error(
-        Exception(
-          'decoder_with_past_model.onnx file not found in model directory at <$modelPath>',
-        ),
+        Exception('Failed to load decoder_with_past_model.onnx from <$modelPath>: $e'),
       );
-    }
-    final decoderWithPastBytes = await _loadBytes(decoderWithPastFile.path);
-    decoderWithPastSession = onnxConfig.createSession(decoderWithPastBytes);
-    return Result.ok(null);
-  }
-
-
-  /// Load bytes from either external file or bundled asset
-  Future<Uint8List> _loadBytes(String path) async {
-    if (Utils.isExternalPath(path)) {
-      debugPrint("Loading from external file: $path");
-      return await File(path).readAsBytes();
-    } else {
-      final assetPath = '${Utils.isRunningInTestEnvironment() ? '' : 'packages/flutter_ondevice_asr/'}$path';
-      debugPrint("Loading from asset: $assetPath");
-      final data = await rootBundle.load(assetPath);
-      return data.buffer.asUint8List();
     }
   }
 
@@ -491,16 +472,15 @@ class WhisperTranscriber implements Transcriber {
     required String languageCode,
   }) async {
     final configPath = '$modelPath/generation_config.json';
-    final configFile = File(configPath);
-    if (!configFile.existsSync()) {
+    String configContent;
+    try {
+      configContent = await Utils.loadString(configPath);
+    } catch (e) {
       return Result.error(
-        Exception(
-          'generation_config.json file does not exist at model-path: <$modelPath>',
-        ),
+        Exception('Failed to load generation_config.json from <$modelPath>: $e'),
       );
     }
-    final config =
-    jsonDecode(configFile.readAsStringSync()) as Map<String, dynamic>;
+    final config = jsonDecode(configContent) as Map<String, dynamic>;
 
     int getTokenId(dynamic value) {
       if (value is int) {

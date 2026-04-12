@@ -70,8 +70,9 @@ flutter:
   uses-material-design: true
 
   # To add assets to your application, add an assets section, like this:
-#  assets:
-#    - packages/flutter_ondevice_asr/assets/transcribers/whisper/models/whisper_tiny/default_int8/
+  assets:
+    - packages/flutter_ondevice_asr/assets/transcribers/whisper/models/whisper_tiny/default_int8/
+    - packages/flutter_ondevice_asr/assets/audio/
 
   # For details regarding adding assets from package dependencies, see
   # https://flutter.dev/to/asset-from-package

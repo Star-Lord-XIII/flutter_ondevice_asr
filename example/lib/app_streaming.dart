@@ -5,7 +5,6 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_ondevice_asr/common/result.dart';
 import 'package:flutter_ondevice_asr/flutter_ondevice_asr.dart';
 import 'package:flutter_ondevice_asr/model/transcription_result.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -171,8 +170,7 @@ class _StreamingTranscriptionPageState extends State<StreamingTranscriptionPage>
       );
 
       // Listen to transcription stream
-      _transcriptionSubscription = _streaming!.transcriptionStream.listen((resultResult) {
-        final result = (resultResult as Ok<TranscriptionResult>).value;
+      _transcriptionSubscription = _streaming!.transcriptionStream.listen((result) {
         setState(() {
           if (result.isFinal) {
             // Add final segment on new line

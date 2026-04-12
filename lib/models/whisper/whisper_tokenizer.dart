@@ -1,7 +1,5 @@
 import 'dart:convert';
-import 'dart:io';
 
-import 'package:flutter/services.dart';
 import 'package:logging/logging.dart';
 
 import '../../common/result.dart';
@@ -17,26 +15,11 @@ class WhisperTokenizer {
     _logger.fine('Loading vocab from path: <$path>');
     _idToToken = {};
 
-    final vocabFile = File(path);
-    // if (!vocabFile.existsSync()) {
-    //   _logger.warning('Vocab file <$path> does not exist.');
-    //   return Result.error(Exception('vocab file <$path> does not exist.'));
-    // }
-    final vocabJson = await _loadString(vocabFile.path);
+    final vocabJson = await Utils.loadString(path);
     final vocab = jsonDecode(vocabJson) as Map<String, dynamic>;
     _idToToken = vocab.map((key, value) => MapEntry(value as int, key));
     _initByteDecoder();
     return Result.ok(null);
-  }
-
-  /// Load string from either external file or bundled asset
-  Future<String> _loadString(String path) async {
-    if (Utils.isExternalPath(path)) {
-      return await File(path).readAsString();
-    } else {
-      final assetPath = '${Utils.isRunningInTestEnvironment() ? '' : 'packages/flutter_ondevice_asr/'}$path';
-      return await rootBundle.loadString(assetPath);
-    }
   }
 
   void _initByteDecoder() {
