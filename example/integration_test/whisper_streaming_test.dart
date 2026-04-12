@@ -1,5 +1,8 @@
 import 'dart:io';
 import 'package:flutter/services.dart';
+import 'package:flutter_ondevice_asr/common/result.dart';
+import 'package:flutter_ondevice_asr/model/transcription_result.dart';
+import 'package:flutter_ondevice_asr/util/audio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:flutter_ondevice_asr/flutter_ondevice_asr.dart';
@@ -35,13 +38,13 @@ void main() {
     print('[${DateTime.now()}] START STREAMING TEST');
     stepSw.start();
 
-    final whisper = WhisperTranscriber(
-      modelDirectory: modelDirectory,
-      language: language,
-    );
+    final whisper = Transcriber.getInstance(TranscriberType.whisper);
 
     // 2. Load models
-    await whisper.loadModels();
+    await whisper.loadModel(
+      modelDirectory: modelDirectory,
+      languageCode: language,
+    );
     logStep('Models loaded');
 
     // 3. Initialize streaming transcriber with all parameters
@@ -53,7 +56,6 @@ void main() {
       enablePartials: true,
       minPartialDuration: 500,
       maxSegmentDuration: 10000,
-      verbose: false, // for time measurements to make sense, we need to turn of excessive logging
     );
     logStep('Streaming transcriber initialized');
 
@@ -75,18 +77,19 @@ void main() {
     int finalCount = 0;
 
     print('\n========== STREAMING TRANSCRIPTION OUTPUT ==========');
-    final subscription = streaming.transcriptionStream.listen((result) {
+    final subscription = streaming.transcriptionStream.listen((resultResult) {
+      final result = (resultResult as Ok<TranscriptionResult>).value;
       final now = DateTime.now();
       firstResultTime ??= now;
       lastResultTime = now;
 
       if (result.isFinal) {
         finalCount++;
-        print('\n[SEGMENT #$finalCount] FINAL (${result.duration.toStringAsFixed(2)}s): "${result.text}"');
+        print('\n[SEGMENT #$finalCount] FINAL (${result.durationInSeconds.toStringAsFixed(2)}s): "${result.text}"');
         finalResults.add(result);
       } else {
         partialCount++;
-        print('[PARTIAL #$partialCount] (${result.duration.toStringAsFixed(2)}s): "${result.text}"');
+        print('[PARTIAL #$partialCount] (${result.durationInSeconds.toStringAsFixed(2)}s): "${result.text}"');
         partialResults.add(result);
       }
     });
@@ -140,7 +143,7 @@ void main() {
     print('\n--- Segment Details ---');
     for (int i = 0; i < finalResults.length; i++) {
       final segment = finalResults[i];
-      print('Segment ${i + 1}: ${segment.duration.toStringAsFixed(2)}s - "${segment.text}"');
+      print('Segment ${i + 1}: ${segment.durationInSeconds.toStringAsFixed(2)}s - "${segment.text}"');
     }
 
     // Combine all final transcriptions

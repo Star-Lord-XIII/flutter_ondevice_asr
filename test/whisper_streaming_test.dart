@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_ondevice_asr/flutter_ondevice_asr.dart';
+import 'package:flutter_ondevice_asr/model/transcription_result.dart';
+import 'package:flutter_ondevice_asr/util/audio.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -14,12 +16,8 @@ void main() {
 
   test('streaming with partials enabled and disabled', () async {
     // Load model once
-    final whisper = WhisperTranscriber(
-      modelDirectory: modelDirectory,
-      language: language,
-      verbose: true,
-    );
-    await whisper.loadModels();
+    final whisper = Transcriber.getInstance(TranscriberType.whisper);
+    await whisper.loadModel(modelDirectory: modelDirectory, languageCode: language);
 
     // Create streaming instance once with all parameters
     final streaming = await StreamingTranscriber.create(
@@ -30,7 +28,6 @@ void main() {
       enablePartials: true,
       minPartialDuration: 500,
       maxSegmentDuration: 10000,
-      verbose: true,
     );
 
     final audioData = await Audio.instance.loadAudio(testAudioFile);

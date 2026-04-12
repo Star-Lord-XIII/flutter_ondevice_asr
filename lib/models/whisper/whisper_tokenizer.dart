@@ -1,125 +1,118 @@
-// Tokenizer for whisper models (en-only and multilingual)
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:flutter/services.dart';
+import 'package:logging/logging.dart';
+
+import '../../common/result.dart';
+import '../../util/utils.dart';
 
 class WhisperTokenizer {
-  static WhisperTokenizer? _instance;
-  Map<int, String>? _idToToken;
-  Map<int, int>? _byteDecoder;
+  final _logger = Logger('WhisperTokenizer');
 
-  WhisperTokenizer._();
+  Map<int, String> _idToToken = {};
+  Map<int, int> _byteDecoder = {};
 
-  static WhisperTokenizer get instance {
-    _instance ??= WhisperTokenizer._();
-    return _instance!;
-  }
-
-  /// Load vocabulary from the given path
-  Future<void> loadVocab({required String path}) async {
-    if (_idToToken != null) return;
+  Future<Result<void>> loadVocab({required String path}) async {
+    _logger.fine('Loading vocab from path: <$path>');
+    _idToToken = {};
 
     final vocabFile = File(path);
-    String? vocabJson;
-    if (!vocabFile.existsSync()) {
-      String vocabPath = 'packages/flutter_ondevice_asr/assets/transcribers/whisper/tokenizer/vocab_multilingual.json';
-      vocabJson = await rootBundle.loadString(vocabPath);
-    } else {
-      vocabJson = vocabFile.readAsStringSync();
-    }
+    // if (!vocabFile.existsSync()) {
+    //   _logger.warning('Vocab file <$path> does not exist.');
+    //   return Result.error(Exception('vocab file <$path> does not exist.'));
+    // }
+    final vocabJson = await _loadString(vocabFile.path);
     final vocab = jsonDecode(vocabJson) as Map<String, dynamic>;
-
-    _idToToken = {};
-    for (var entry in vocab.entries) {
-      _idToToken![entry.value as int] = entry.key;
-    }
-
+    _idToToken = vocab.map((key, value) => MapEntry(value as int, key));
     _initByteDecoder();
+    return Result.ok(null);
   }
 
-  /// Reset the tokenizer (for testing purposes)
-  void reset() {
-    _idToToken = null;
-    _byteDecoder = null;
+  /// Load string from either external file or bundled asset
+  Future<String> _loadString(String path) async {
+    if (Utils.isExternalPath(path)) {
+      return await File(path).readAsString();
+    } else {
+      final assetPath = '${Utils.isRunningInTestEnvironment() ? '' : 'packages/flutter_ondevice_asr/'}$path';
+      return await rootBundle.loadString(assetPath);
+    }
   }
 
   void _initByteDecoder() {
     _byteDecoder = {};
-    final Map<int, int> b2u = {};
+    final Map<int, int> byteToUnicode = {};
 
-    // Helper to add ranges exactly like HuggingFace's bytes_to_unicode
     void addRange(int start, int end) {
       for (int i = start; i <= end; i++) {
-        b2u[i] = i;
+        byteToUnicode[i] = i;
       }
     }
 
-    addRange(33, 126);   // ! to ~
-    addRange(161, 172);  // ¡ to ¬
-    addRange(174, 255);  // ® to ÿ
+    addRange("!".codeUnitAt(0), "~".codeUnitAt(0));
+    addRange("¡".codeUnitAt(0), "¬".codeUnitAt(0));
+    addRange("®".codeUnitAt(0), "ÿ".codeUnitAt(0));
 
     // Any byte not added above (including 0-32, 127-160, 173)
     // is mapped to Unicode characters starting at 256
     int n = 0;
     for (int b = 0; b < 256; b++) {
-      if (!b2u.containsKey(b)) {
-        b2u[b] = 256 + n;
+      if (!byteToUnicode.containsKey(b)) {
+        byteToUnicode[b] = 256 + n;
         n++;
       }
     }
 
     // IMPORTANT: For decoding, we want: Unicode Character -> Raw Byte
-    b2u.forEach((byte, unicode) {
-      _byteDecoder![unicode] = byte;
+    byteToUnicode.forEach((byte, unicode) {
+      _byteDecoder[unicode] = byte;
     });
   }
 
-  /// The correctly integrated decode method
-  String decode(List<int> tokenIds, {bool skipSpecialTokens = true}) {
-    if (_idToToken == null) {
-      throw StateError('Tokenizer not loaded. Call loadVocab() first.');
+  Result<String> decode(List<int> tokenIds, {bool skipSpecialTokens = true}) {
+    if (_idToToken.isEmpty) {
+      return Result.error(
+        Exception('Tokenizer not loaded. Call loadVocab() first.'),
+      );
     }
-
     final result = StringBuffer();
     final allBytes = <int>[];
 
-    for (var id in tokenIds) {
-      final token = _idToToken![id];
-      if (token == null) continue;
-
-      // Handle special tokens separately - they should be returned as-is
-      if (token.startsWith('<|') && token.endsWith('|>')) {
-        // Flush any accumulated bytes first
+    for (final id in tokenIds) {
+      final token = _idToToken[id];
+      if (token == null) {
+        continue;
+      } else if (_isSpecialToken(token)) {
         if (allBytes.isNotEmpty) {
           result.write(utf8.decode(allBytes, allowMalformed: true));
           allBytes.clear();
         }
-
-        // Add special token directly (or skip if requested)
         if (!skipSpecialTokens) {
           result.write(token);
         }
-        continue;
-      }
-
-      // Convert characters in token string (e.g. 'Ġ', '你好') back to raw bytes
-      for (int i = 0; i < token.length; i++) {
-        final charUnit = token.codeUnitAt(i);
-        final byte = _byteDecoder![charUnit];
-        if (byte != null) {
-          allBytes.add(byte);
-        } else {
-          // Fallback for characters that are already valid bytes
-          if (charUnit < 256) allBytes.add(charUnit);
+      } else {
+        for (int i = 0; i < token.length; i++) {
+          final charUnit = token.codeUnitAt(i);
+          final byte = _byteDecoder[charUnit];
+          if (byte != null) {
+            allBytes.add(byte);
+          } else {
+            if (charUnit < 256) {
+              allBytes.add(charUnit);
+            }
+          }
         }
       }
     }
 
-    // Flush any remaining bytes
     if (allBytes.isNotEmpty) {
       result.write(utf8.decode(allBytes, allowMalformed: true));
     }
 
-    return result.toString();
+    return Result.ok(result.toString());
+  }
+
+  bool _isSpecialToken(String token) {
+    return token.startsWith('<|') && token.endsWith('|>');
   }
 }

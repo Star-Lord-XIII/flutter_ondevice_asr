@@ -1,7 +1,6 @@
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter_ondevice_asr/util/audio.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_ondevice_asr/audio.dart';
 
 void main() {
   test('load audio', () async {

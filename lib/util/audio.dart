@@ -2,8 +2,9 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/services.dart';
-import 'package:flutter_ondevice_asr/utils.dart';
 import 'dart:developer' as dev;
+
+import 'utils.dart';
 
 final class Audio {
   static Audio instance = Audio._init();
@@ -16,7 +17,7 @@ final class Audio {
     final tik = DateTime.now();
     // Read the WAV file as bytes
     final Uint8List bytes;
-    if (isRunningInTestEnvironment()) {
+    if (Utils.isRunningInTestEnvironment()) {
       bytes = (await rootBundle.load(filePath)).buffer.asUint8List();
     } else {
       bytes = await File(filePath).readAsBytes();
@@ -64,6 +65,4 @@ final class Audio {
     }
     return result;
   }
-
-
 }
