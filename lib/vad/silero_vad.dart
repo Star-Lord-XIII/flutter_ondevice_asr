@@ -1,15 +1,14 @@
-/// Dart implementation of Silero VAD using ONNX Runtime
-/// Based on https://github.com/snakers4/silero-vad
-
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_ondevice_asr/onnx_config.dart';
 import 'package:onnxruntime_v2/onnxruntime_v2.dart';
+
+import '../model/onnx_config.dart';
+import '../util/utils.dart';
 
 /// ONNX wrapper for Silero VAD model
 class SileroVAD {
-  final String sileroVadModelPath = 'packages/flutter_ondevice_asr/assets/vad/silero_vad/silero_vad.onnx';
+  static const String _vadAssetPath = 'assets/vad/silero_vad/silero_vad.onnx';
+  final String sileroVadModelPath = 'packages/${Utils.packageName}/$_vadAssetPath';
   final bool verbose;
 
   late final OrtSession _session;

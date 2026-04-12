@@ -53,15 +53,23 @@ class OnnxConfig {
     if (enableXnnpack && (Platform.isAndroid || Platform.isIOS)) {
       try {
         options.appendXnnpackProvider();
-        debugPrint('[OnnxConfig] Execution Provider: XNNPACK ✓ (ARM-optimized SIMD)');
+        debugPrint(
+          '[OnnxConfig] Execution Provider: XNNPACK ✓ (ARM-optimized SIMD)',
+        );
       } catch (e) {
-        debugPrint('[OnnxConfig] Execution Provider: CPU (XNNPACK unavailable: $e)');
+        debugPrint(
+          '[OnnxConfig] Execution Provider: CPU (XNNPACK unavailable: $e)',
+        );
       }
     } else {
-      debugPrint('[OnnxConfig] Execution Provider: CPU (platform: ${Platform.operatingSystem})');
+      debugPrint(
+        '[OnnxConfig] Execution Provider: CPU (platform: ${Platform.operatingSystem})',
+      );
     }
 
-    debugPrint('[OnnxConfig] Threads: intra=$intraOpNumThreads, inter=$interOpNumThreads');
+    debugPrint(
+      '[OnnxConfig] Threads: intra=$intraOpNumThreads, inter=$interOpNumThreads',
+    );
     debugPrint('[OnnxConfig] Optimization: $graphOptimizationLevel');
 
     return options;
@@ -113,4 +121,3 @@ class VadOnnxConfig extends OnnxConfig {
     super.enableXnnpack = true,
   });
 }
-

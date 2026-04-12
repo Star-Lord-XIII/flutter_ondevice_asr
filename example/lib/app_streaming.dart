@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_ondevice_asr/flutter_ondevice_asr.dart';
+import 'package:flutter_ondevice_asr/model/transcription_result.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:record/record.dart';
 
@@ -38,7 +39,7 @@ class StreamingTranscriptionPage extends StatefulWidget {
 
 class _StreamingTranscriptionPageState extends State<StreamingTranscriptionPage> {
   final AudioRecorder _audioRecorder = AudioRecorder();
-  late final WhisperTranscriber _whisper;
+  late final Transcriber _whisper;
 
   StreamingTranscriber? _streaming;
   StreamSubscription<TranscriptionResult>? _transcriptionSubscription;
@@ -133,11 +134,7 @@ class _StreamingTranscriptionPageState extends State<StreamingTranscriptionPage>
       final startTime = DateTime.now();
 
       // Initialize WhisperTranscriber with selected language
-      _whisper = WhisperTranscriber(
-        modelDirectory: 'assets/transcribers/whisper/models/whisper_tiny/default_int8',
-        language: _selectedLanguage,
-        verbose: false,
-      );
+      _whisper = Transcriber.getInstance(TranscriberType.whisper);
 
       // Simulate progress tracking (ONNX Runtime doesn't expose real progress)
       setState(() {
@@ -153,7 +150,10 @@ class _StreamingTranscriptionPageState extends State<StreamingTranscriptionPage>
       });
 
       // Actually load the models
-      await _whisper.loadModels();
+      await _whisper.loadModel(
+        modelDirectory: 'assets/transcribers/whisper/models/whisper_tiny/default_int8',
+        languageCode: _selectedLanguage,
+      );
 
       final duration = DateTime.now().difference(startTime);
       _addLog('Models loaded in ${duration.inMilliseconds}ms');
@@ -167,7 +167,6 @@ class _StreamingTranscriptionPageState extends State<StreamingTranscriptionPage>
         enablePartials: _enablePartials,
         minPartialDuration: _minPartialDuration.toInt(),
         maxSegmentDuration: _maxSegmentDuration,
-        verbose: false,
       );
 
       // Listen to transcription stream
@@ -181,11 +180,11 @@ class _StreamingTranscriptionPageState extends State<StreamingTranscriptionPage>
             _transcription += result.text;
             _currentPartial = '';  // Clear partial
 
-            _addLog('FINAL (${result.duration.toStringAsFixed(1)}s): ${result.text}');
+            _addLog('FINAL (${result.durationInSeconds.toStringAsFixed(1)}s): ${result.text}');
           } else {
             // Update current partial
             _currentPartial = result.text;
-            _addLog('PARTIAL (${result.duration.toStringAsFixed(1)}s): ${result.text}');
+            _addLog('PARTIAL (${result.durationInSeconds.toStringAsFixed(1)}s): ${result.text}');
           }
         });
       });
@@ -244,8 +243,7 @@ class _StreamingTranscriptionPageState extends State<StreamingTranscriptionPage>
         _streaming!.reset();
 
         // Listen to transcription stream (reuse existing subscription if present)
-        if (_transcriptionSubscription == null) {
-          _transcriptionSubscription = _streaming!.transcriptionStream.listen((result) {
+        _transcriptionSubscription ??= _streaming!.transcriptionStream.listen((result) {
           setState(() {
             if (result.isFinal) {
               // Add final segment on new line
@@ -255,15 +253,14 @@ class _StreamingTranscriptionPageState extends State<StreamingTranscriptionPage>
               _transcription += result.text;
               _currentPartial = '';  // Clear partial
 
-              _addLog('FINAL (${result.duration.toStringAsFixed(1)}s): ${result.text}');
+              _addLog('FINAL (${result.durationInSeconds.toStringAsFixed(1)}s): ${result.text}');
             } else {
               // Update current partial
               _currentPartial = result.text;
-              _addLog('PARTIAL (${result.duration.toStringAsFixed(1)}s): ${result.text}');
+              _addLog('PARTIAL (${result.durationInSeconds.toStringAsFixed(1)}s): ${result.text}');
             }
           });
           });
-        }
 
         _addLog('Streaming configured: partials=$_enablePartials, minPartial=${_minPartialDuration.toInt()}ms, maxSegment=${_maxSegmentDuration}ms');
 

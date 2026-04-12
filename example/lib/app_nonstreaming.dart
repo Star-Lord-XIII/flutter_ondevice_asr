@@ -2,7 +2,9 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_ondevice_asr/common/result.dart';
 import 'package:flutter_ondevice_asr/flutter_ondevice_asr.dart';
+import 'package:flutter_ondevice_asr/model/transcription_result.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:record/record.dart';
@@ -36,7 +38,7 @@ class TranscriptionDemoPage extends StatefulWidget {
 
 class _TranscriptionDemoPageState extends State<TranscriptionDemoPage> {
   final AudioRecorder _audioRecorder = AudioRecorder();
-  late final WhisperTranscriber _whisper;
+  late final Transcriber _whisper;
 
   bool _isRecording = false;
   bool _isLoading = false;
@@ -97,11 +99,7 @@ class _TranscriptionDemoPageState extends State<TranscriptionDemoPage> {
       final startTime = DateTime.now();
 
       // Initialize WhisperTranscriber with selected language
-      _whisper = WhisperTranscriber(
-        modelDirectory: 'assets/transcribers/whisper/models/whisper_tiny/default_int8',
-        language: _selectedLanguage,
-        verbose: false,
-      );
+      _whisper = Transcriber.getInstance(TranscriberType.whisper);
 
       // Simulate progress tracking (ONNX Runtime doesn't expose real progress)
       setState(() {
@@ -117,7 +115,8 @@ class _TranscriptionDemoPageState extends State<TranscriptionDemoPage> {
       });
 
       // Actually load the models
-      await _whisper.loadModels();
+      await _whisper.loadModel(modelDirectory: 'assets/transcribers/whisper/models/whisper_tiny/default_int8',
+    languageCode: _selectedLanguage);
 
       final duration = DateTime.now().difference(startTime);
       _addLog('Models loaded in ${duration.inMilliseconds}ms');
@@ -236,14 +235,14 @@ class _TranscriptionDemoPageState extends State<TranscriptionDemoPage> {
       _addLog('Starting transcription...');
       final startTime = DateTime.now();
 
-      final result = await _whisper.transcribeFile(_recordingPath!);
+      final result = await _whisper.transcribeFile(_recordingPath!) as Ok<TranscriptionResult>;
 
       final duration = DateTime.now().difference(startTime);
       _addLog('Transcription completed in ${duration.inMilliseconds}ms');
 
       setState(() {
         _isTranscribing = false;
-        _transcription = result.text;
+        _transcription = result.value.text;
         _statusMessage = 'Transcription complete!';
       });
 

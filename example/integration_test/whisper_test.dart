@@ -1,9 +1,13 @@
 import 'dart:io';
 import 'dart:math';
 import 'package:flutter/services.dart';
+import 'package:flutter_ondevice_asr/common/result.dart';
+import 'package:flutter_ondevice_asr/model/transcription_result.dart';
+import 'package:flutter_ondevice_asr/util/audio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:flutter_ondevice_asr/flutter_ondevice_asr.dart';
+import 'package:logging/logging.dart';
 import 'package:path_provider/path_provider.dart';
 
 
@@ -12,7 +16,6 @@ void main() {
 
   const testAudioFile = 'packages/flutter_ondevice_asr/assets/audio/jfk_asknot.wav';
   const expectedTranscript = 'And so my fellow Americans ask not what your country can do for you, ask what you can do for your country.';
-  // Model configuration - using bundled multilingual model
   const modelDirectory = 'assets/transcribers/whisper/models/whisper_tiny/default_int8';
   const String language = 'en';
 
@@ -22,6 +25,13 @@ void main() {
   // Alternative: use external model paths (not bundled):
   // const modelDirectory = '/tmp/onnx_tiny/default';  // multilingual
   // const modelDirectory = '/tmp/onnx_tiny_en/default';  // English-only
+
+  setUp(() {
+    Logger.root.level = Level.ALL; // defaults to Level.INFO
+    Logger.root.onRecord.listen((record) {
+      print('${record.loggerName}: ${record.time}: ${record.message}');
+    });
+  });
 
   testWidgets('transcribe test audio', (WidgetTester tester) async {
     // 1. Initialize stopwatch to measure durations
@@ -37,14 +47,11 @@ void main() {
     print('[${DateTime.now()}] START TEST');
     stepSw.start();
 
-    final whisper = WhisperTranscriber(
-      modelDirectory: modelDirectory,
-      language: language,
-      verbose: false, // for time measurements to make sense, we need to turn of excessive logging
-    );
+    final whisper = Transcriber.getInstance(TranscriberType.whisper);
 
     // 2. Load models
-    await whisper.loadModels();
+    final loadModelResult = await whisper.loadModel(modelDirectory: modelDirectory, languageCode: language);
+    expect(loadModelResult is Ok, true);
     logStep('Models loaded');
 
     // 3. Load test audio
@@ -75,11 +82,11 @@ void main() {
       print('\n--- Run ${run + 1}/5 ---');
       stepSw.reset();
       stepSw.start();
-      final result = await whisper.transcribe(testAudioFloat32List);
+      final result = await whisper.transcribe(testAudioFloat32List) as Ok<TranscriptionResult>;
       final durationMs = stepSw.elapsedMilliseconds.toDouble();
       durations.add(durationMs);
       print('Duration: ${durationMs.toStringAsFixed(1)} ms');
-      if (run == 0) transcript = result.text;
+      if (run == 0) transcript = result.value.text;
     }
 
     // Calculate average and standard deviation

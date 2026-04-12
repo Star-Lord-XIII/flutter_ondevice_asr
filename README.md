@@ -138,17 +138,16 @@ This library provides demo apps to demonstrate library usage:
 
 ## Performance Measurement
 
-Measured on test audio (`assets/audio/jfk_asknot.wav`, 11 seconds) in non-streaming mode. Run `flutter test integration_test/whisper_test.dart` (from `example/` directory) to measure on your device.
+Measured on test audio (`assets/audio/jfk_asknot.wav`, 11 seconds) in non-streaming mode. Run `flutter run --release -d <DEVICE_ID> integration_test/whisper_test.dart` (from `example/` directory) to measure on your device.
 
 | Device | Model | Inference time (avg ± std) |
 | -- | -- | -- |
 | Macbook Pro M2 | default | 576.4 ± 37.3 ms |
-| Macbook Pro M2 | default_int8 | 477.8 ± 22.1 ms |
+| Macbook Pro M2 | default_int8 | 485.4 ± 26.9 ms |
 | Samsung Galaxy 11A+ Tablet | default | 7758.6 ± 121.4 ms |
-| Samsung Galaxy 11A+ Tablet | default_int8 | 1137.0 ± 34.3 ms |
+| Samsung Galaxy 11A+ Tablet | default_int8 | 1396.6 ± 143.0 ms |
 | Huawei Y9 Prime 2019 (STK-L21) | default_int8 | 3370.0 +- 120.5 ms|
 | Samsung Tablet SM X115 | default_int8 | 1509.8 +- 48.9 ms|
-
 
 
 **Quantization Impact:**
