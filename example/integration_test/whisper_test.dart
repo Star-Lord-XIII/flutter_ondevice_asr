@@ -16,7 +16,6 @@ void main() {
 
   const testAudioFile = 'packages/flutter_ondevice_asr/assets/audio/jfk_asknot.wav';
   const expectedTranscript = 'And so my fellow Americans ask not what your country can do for you, ask what you can do for your country.';
-  // Model configuration - using bundled multilingual model
   const modelDirectory = 'assets/transcribers/whisper/models/whisper_tiny/default_int8';
   const String language = 'en';
 

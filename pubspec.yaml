@@ -30,6 +30,4 @@ flutter:
    assets:
      - assets/audio/
      - assets/vad/silero_vad/
-     - assets/transcribers/whisper/tokenizer/
-     - assets/transcribers/whisper/models/whisper_tiny/default/
      - assets/transcribers/whisper/models/whisper_tiny/default_int8/
