@@ -25,7 +25,10 @@ class SileroVAD {
   Float32List? _state;
   Float32List _context = Float32List(0);
   int _lastSr = 0;
-  int _lastBatchSize = 0;
+
+  // Pre-allocated buffers to avoid per-call allocations
+  late Float32List _inputDataBuffer;
+  late Int64List _srBuffer;
 
   bool _isInitialized = false;
 
@@ -72,9 +75,12 @@ class SileroVAD {
     _h = Float32List(2 * batchSize * 64);
     _c = Float32List(2 * batchSize * 64);
     _state = Float32List(2 * batchSize * 128);
-    _context = Float32List(0);
+    _context = Float32List(contextSize);
     _lastSr = 0;
-    _lastBatchSize = 0;
+
+    // Pre-allocate reusable buffers (allocated once, reused every call)
+    _inputDataBuffer = Float32List(contextSize + requiredChunkSize);
+    _srBuffer = Int64List(1);
   }
 
   /// Run VAD inference on audio chunk
@@ -102,40 +108,28 @@ class SileroVAD {
 
     final batchSize = 1;
 
-    // Reset states if batch size or sample rate changed
-    if (_lastBatchSize == 0) {
-      resetStates(batchSize: batchSize);
-    }
+    // Reset states if sample rate changed (batch size is always 1)
     if (_lastSr != 0 && _lastSr != sr) {
       resetStates(batchSize: batchSize);
     }
-    if (_lastBatchSize != 0 && _lastBatchSize != batchSize) {
-      resetStates(batchSize: batchSize);
-    }
 
-    // Initialize context buffer if needed
-    if (_context.isEmpty) {
-      _context = Float32List(contextSize);
-    }
+    // Concatenate context with input using pre-allocated buffer
+    // Uses setRange() which is optimized (memcpy) vs element-by-element loops
+    _inputDataBuffer.setRange(0, contextSize, _context);
+    _inputDataBuffer.setRange(contextSize, contextSize + requiredChunkSize, x);
 
-    // Concatenate context with input: shape (1, contextSize + requiredChunkSize)
-    final inputLength = contextSize + requiredChunkSize;
-    final inputData = Float32List(inputLength);
-    for (int i = 0; i < contextSize; i++) {
-      inputData[i] = _context[i];
-    }
-    for (int i = 0; i < requiredChunkSize; i++) {
-      inputData[contextSize + i] = x[i];
-    }
+    // Reuse sample rate buffer
+    _srBuffer[0] = sr;
 
     // Create 2D tensor: (batch_size=1, samples) - pass Float32List directly
+    final inputLength = contextSize + requiredChunkSize;
     final inputTensor = OrtValueTensor.createTensorWithDataList(
-      inputData,  // Pass Float32List directly without wrapping
+      _inputDataBuffer,
       [1, inputLength],
     );
 
     final srTensor = OrtValueTensor.createTensorWithDataList(
-      Int64List.fromList([sr]),
+      _srBuffer,
       [1],
     );
 
@@ -277,12 +271,10 @@ class SileroVAD {
         }
       }
 
-      // Update context with last contextSize samples from input
-      _context = Float32List(contextSize);
-      _context.setRange(0, contextSize, inputData, inputData.length - contextSize);
+      // Update context in-place with last contextSize samples from input buffer
+      _context.setRange(0, contextSize, _inputDataBuffer, _inputDataBuffer.length - contextSize);
 
       _lastSr = sr;
-      _lastBatchSize = batchSize;
 
       // Release output tensors
       for (var output in outputs) {
