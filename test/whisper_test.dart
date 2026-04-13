@@ -125,7 +125,59 @@ void main() {
         );
         debugPrint('Number of words: ${words.length}');
 
+        // Verify word confidences match expected values
+        final expectedWordConfidences = [
+          ('And', 0.690),
+          ('so', 0.923),
+          ('my', 0.792),
+          ('fellow', 0.998),
+          ('Americans', 0.952),
+          ('ask', 0.602),
+          ('not', 0.460),
+          ('what', 0.806),
+          ('your', 0.592),
+          ('country', 0.994),
+          ('can', 0.988),
+          ('do', 0.993),
+          ('for', 0.979),
+          ('you,', 0.380),
+          ('ask', 0.891),
+          ('what', 0.954),
+          ('you', 0.994),
+          ('can', 0.992),
+          ('do', 0.995),
+          ('for', 0.993),
+          ('your', 0.966),
+          ('country.', 0.810),
+        ];
+
+        expect(words.length, expectedWordConfidences.length);
+        for (int i = 0; i < words.length; i++) {
+          expect(words[i].word, expectedWordConfidences[i].$1);
+          // Allow 10% tolerance for confidence values
+          final expectedConf = expectedWordConfidences[i].$2;
+          expect(words[i].confidence, closeTo(expectedConf, expectedConf * 0.1));
+        }
+
+        // Test 3: WITH segment confidence (single run)
+        debugPrint('\n=== Test 3: transcribe() WITH segment confidence (1 run) ===');
+        final resultSegment = await whisper.transcribe(
+          audioData,
+          getSegmentDetails: true,
+          maxOutputTokens: 32,
+        );
+        final transcript3 = (resultSegment as Ok<TranscriptionResult>).value.text;
+        final segmentConfidences = resultSegment.value.confidences;
+
+        debugPrint('Transcript: $transcript3');
+        debugPrint('Segment confidence: ${segmentConfidences?.first.toStringAsFixed(3) ?? "null"}');
+
         expect(transcript1, expectedTranscript);
         expect(transcript2, expectedTranscript);
+        expect(transcript3, expectedTranscript);
+        expect(segmentConfidences, isNotNull);
+        expect(segmentConfidences!.length, 1);
+        // Allow 10% tolerance for segment confidence
+        expect(segmentConfidences.first, closeTo(0.839, 0.839 * 0.1));
       });
 }

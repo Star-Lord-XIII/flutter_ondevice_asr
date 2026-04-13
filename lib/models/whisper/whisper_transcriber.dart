@@ -108,7 +108,8 @@ class WhisperTranscriber implements Transcriber {
     final decoderResultResult = await _runDecoder(
       audioFeaturesTensor,
       effectiveMaxTokens,
-      computeConfidence: getWordDetails,
+      computeTokenConfidence: getWordDetails,
+      computeSegmentConfidence: getSegmentDetails,
     );
     audioFeaturesTensor.release();
 
@@ -133,6 +134,16 @@ class WhisperTranscriber implements Transcriber {
         words = _mapTokensToWordsWithConfidences(tokens, confidences);
       }
     }
+
+    // Extract segment-level confidence if requested
+    List<double>? segmentConfidences;
+    if (getSegmentDetails && transcript.isNotEmpty) {
+      final segmentConfidence = decoderResult['segmentConfidence'] as double?;
+      if (segmentConfidence != null) {
+        segmentConfidences = [segmentConfidence];
+      }
+    }
+
     final duration = audio.length / 16000.0; // Assuming 16kHz sample rate
 
     return Result.ok(
@@ -143,6 +154,7 @@ class WhisperTranscriber implements Transcriber {
         timestamp: DateTime.now(),
         words: words,
         segments: (segmentEnd && transcript.isNotEmpty) ? [transcript] : null,
+        confidences: segmentConfidences,
       ),
     );
   }
@@ -252,7 +264,8 @@ class WhisperTranscriber implements Transcriber {
   Future<Result<Map<String, dynamic>>> _runDecoder(
       OrtValueTensor audioFeaturesTensor,
       int maxTokens, {
-        bool computeConfidence = false,
+        bool computeTokenConfidence = false,
+        bool computeSegmentConfidence = false,
       }) async {
     final List<int> tokens = [
       sotToken,
@@ -271,6 +284,8 @@ class WhisperTranscriber implements Transcriber {
     final decoderOutputNames = decoderSession!.outputNames;
     final decoderWithPastOutputNames = decoderWithPastSession!.outputNames;
     final List<double> confidences = [];
+    double sumLogProbs = 0.0;
+    int generatedTokenCount = 0;
 
     final runOptions = OrtRunOptions();
     final singleTokenBuffer = Int64List(1);
@@ -394,15 +409,6 @@ class WhisperTranscriber implements Transcriber {
         }
       }
 
-      if (computeConfidence) {
-        double expSum = 0.0;
-        for (int j = 0; j < lastLogits.length; j++) {
-          expSum += exp(lastLogits[j] - maxLogit);
-        }
-        final confidence = exp(lastLogits[nextToken] - maxLogit) / expSum;
-        confidences.add(confidence);
-      }
-
       _logger.finer(
         'Step $i | ID: $nextToken | Logit: ${maxLogit.toStringAsFixed(2)} | Text: ${_tokenizer.decode(tokens, skipSpecialTokens: false)}',
       );
@@ -411,6 +417,28 @@ class WhisperTranscriber implements Transcriber {
         break;
       }
       tokens.add(nextToken);
+
+      // Compute token confidence if needed (expensive since we iterate over all ~51k logits per token)
+      // confidence(token) = exp(logit[token] - maxLogit) / expSum
+      // since we do greedy decoding chosing token with max logit, this simplifies to:
+      // confidence(nextToken) = exp(maxLogit - maxLogit) / expSum
+      //                       = exp(0) / expSum
+      //                       = 1 / expSum
+      if (computeSegmentConfidence || computeTokenConfidence) {
+        double expSum = 0.0;
+        for (int j = 0; j < lastLogits.length; j++) {
+          expSum += exp(lastLogits[j] - maxLogit);
+        }
+        final confidence = 1.0 / expSum;
+
+        if (computeTokenConfidence) {
+          confidences.add(confidence);
+        }
+        if (computeSegmentConfidence) {
+          sumLogProbs += log(confidence);
+          generatedTokenCount++;
+        }
+      }
     }
     runOptions.release();
     if (pastKeyValues != null) {
@@ -436,10 +464,18 @@ class WhisperTranscriber implements Transcriber {
     // to align tokens with confidences (which are only for generated tokens)
     final generatedTokens = tokens.length > 4 ? tokens.sublist(4) : <int>[];
 
+    // Compute segment-level confidence from average log probability
+    double? segmentConfidence;
+    if (computeSegmentConfidence && generatedTokenCount > 0) {
+      final avgLogProb = sumLogProbs / generatedTokenCount;
+      segmentConfidence = exp(avgLogProb);
+    }
+
     return Result.ok({
       'transcript': transcript,
       'confidences': confidences,
       'tokens': generatedTokens,
+      'segmentConfidence': segmentConfidence,
     });
   }
 
