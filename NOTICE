@@ -1,0 +1,36 @@
+flutter_ondevice_asr
+
+Copyright 2025 Centre for Digital Language Inclusion (CDLI)
+
+https://www.cdl-inclusion.com/
+
+This project is licensed under the Apache License, Version 2.0.
+
+================================================================================
+
+This project includes code derived from:
+
+Project Euphonia App
+https://github.com/google/project-euphonia-app
+Copyright Google LLC
+Licensed under the Apache License, Version 2.0
+
+================================================================================
+
+Third-party dependencies:
+
+This software uses the following open-source libraries:
+
+- onnxruntime_v2 (MIT License)
+  https://pub.dev/packages/onnxruntime_v2
+
+- path_provider (BSD-3-Clause License)
+  https://pub.dev/packages/path_provider
+
+- vector_math (BSD-3-Clause + Zlib License)
+  https://pub.dev/packages/vector_math
+
+- logging (BSD-3-Clause License)
+  https://pub.dev/packages/logging
+
+================================================================================

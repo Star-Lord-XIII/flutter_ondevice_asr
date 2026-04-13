@@ -143,11 +143,13 @@ Measured on test audio (`assets/audio/jfk_asknot.wav`, 11 seconds) in non-stream
 | Device | Model | Inference time (avg ± std) |
 | -- | -- | -- |
 | Macbook Pro M2 | default | 576.4 ± 37.3 ms |
-| Macbook Pro M2 | default_int8 | 485.4 ± 26.9 ms |
-| Samsung Galaxy 11A+ Tablet | default | 7758.6 ± 121.4 ms |
-| Samsung Galaxy 11A+ Tablet | default_int8 | 1396.6 ± 143.0 ms |
+| Macbook Pro M2 | default_int8 | 477.8 ± 22.1 ms |
+| Samsung Galaxy 11A+ Tablet (SM X230)| default | 7758.6 ± 121.4 ms |
+| Samsung Galaxy 11A+ Tablet (SM X230) | default_int8 | 1396.6 ± 143.0 ms |
+| Pixel 6a | default_int8 | 917.2 ± 53.2 ms |
 | Huawei Y9 Prime 2019 (STK-L21) | default_int8 | 3370.0 +- 120.5 ms|
 | Samsung Tablet SM X115 | default_int8 | 1509.8 +- 48.9 ms|
+
 
 
 **Quantization Impact:**
@@ -232,9 +234,3 @@ Integration tests (`integration_test/`) don't require this setup as they build t
    ln -sf /opt/homebrew/Cellar/onnxruntime/1.23.2_2/lib/libonnxruntime.1.21.0.dylib .
    ```
 
-
-# Licence
-
-TODO
-
-Also add licence of included libraries, whisper models, whisper tokenizer and silero vad
