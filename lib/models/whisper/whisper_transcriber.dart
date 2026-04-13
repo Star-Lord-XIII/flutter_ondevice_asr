@@ -128,35 +128,9 @@ class WhisperTranscriber implements Transcriber {
 
     if (getWordDetails && transcript.isNotEmpty) {
       final confidences = decoderResult['confidences'] as List<double>?;
-      if (confidences != null) {
-        final wordStrings = transcript.split(' ');
-
-        // TODO: KNOWN ISSUE - This naive pairing of confidences with words is incorrect!
-        // The 'confidences' list contains per-token confidence scores (before decoding),
-        // but 'wordStrings' are words after decoding and splitting by spaces.
-        // Since Whisper uses BPE/subword tokenization, tokens ≠ words:
-        // - Multiple tokens can form one word (e.g., "running" might be ["run", "##ning"])
-        // - One token might span multiple words
-        // - Token count != word count, so this 1:1 pairing is wrong
-        //
-        // Proper solution would be to:
-        // 1. Decode each token individually to track token-to-word boundaries
-        // 2. Aggregate token confidences per word (e.g., average or minimum)
-        // 3. Extract actual word timing from model if available (for start/end)
-        //
-        // For now, this provides approximate confidence values but should not be relied upon
-        // for precise word-level confidence scoring.
-
-        words = List.generate(
-          min(wordStrings.length, confidences.length),
-              (i) => Word(
-            word: wordStrings[i],
-            confidence:
-            confidences[i], // WARNING: May not correspond to this word!
-            start: -1.0, // -1.0 indicates timing not available
-            end: -1.0, // -1.0 indicates timing not available
-          ),
-        );
+      final tokens = decoderResult['tokens'] as List<int>?;
+      if (confidences != null && tokens != null) {
+        words = _mapTokensToWordsWithConfidences(tokens, confidences);
       }
     }
     final duration = audio.length / 16000.0; // Assuming 16kHz sample rate
@@ -196,6 +170,57 @@ class WhisperTranscriber implements Transcriber {
     superEncoderSession?.release();
     decoderSession?.release();
     decoderWithPastSession?.release();
+  }
+
+  /// Map tokens to words with proper confidence aggregation.
+  /// Uses minimum confidence across all tokens that form a word.
+  List<Word> _mapTokensToWordsWithConfidences(List<int> tokens, List<double> confidences) {
+    final words = <Word>[];
+    String currentWordText = '';
+    final currentWordConfidences = <double>[];
+
+    for (int i = 0; i < tokens.length; i++) {
+      final tokenText = _tokenizer.decodeSingleToken(tokens[i]);
+
+      // Skip empty tokens (special tokens that were filtered)
+      if (tokenText.isEmpty) continue;
+
+      // Check if this token starts a new word (has leading space)
+      final startsNewWord = _tokenizer.tokenStartsNewWord(tokens[i]);
+
+      if (startsNewWord && currentWordText.trim().isNotEmpty) {
+        // Finish previous word - use minimum confidence
+        words.add(Word(
+          word: currentWordText.trim(),
+          confidence: currentWordConfidences.isNotEmpty
+              ? currentWordConfidences.reduce(min)
+              : -1.0,
+          start: -1.0,
+          end: -1.0,
+        ));
+        currentWordText = '';
+        currentWordConfidences.clear();
+      }
+
+      currentWordText += tokenText;
+      if (i < confidences.length) {
+        currentWordConfidences.add(confidences[i]);
+      }
+    }
+
+    // Don't forget the last word
+    if (currentWordText.trim().isNotEmpty) {
+      words.add(Word(
+        word: currentWordText.trim(),
+        confidence: currentWordConfidences.isNotEmpty
+            ? currentWordConfidences.reduce(min)
+            : -1.0,
+        start: -1.0,
+        end: -1.0,
+      ));
+    }
+
+    return words;
   }
 
   /// Transcribe methods.
@@ -407,7 +432,15 @@ class WhisperTranscriber implements Transcriber {
       );
       transcript = transcriptResult.value.trim();
     }
-    return Result.ok({'transcript': transcript, 'confidences': confidences});
+    // Skip initial prompt tokens (SOT, language, transcribe, notimestamps)
+    // to align tokens with confidences (which are only for generated tokens)
+    final generatedTokens = tokens.length > 4 ? tokens.sublist(4) : <int>[];
+
+    return Result.ok({
+      'transcript': transcript,
+      'confidences': confidences,
+      'tokens': generatedTokens,
+    });
   }
 
   /// Load model methods.

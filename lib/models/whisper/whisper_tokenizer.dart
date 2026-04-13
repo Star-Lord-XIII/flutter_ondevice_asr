@@ -98,4 +98,36 @@ class WhisperTokenizer {
   bool _isSpecialToken(String token) {
     return token.startsWith('<|') && token.endsWith('|>');
   }
+
+  /// Decode a single token to its text representation.
+  /// Handles the BPE byte encoding used by Whisper.
+  String decodeSingleToken(int tokenId, {bool skipSpecialTokens = true}) {
+    final token = _idToToken[tokenId];
+    if (token == null) return '';
+    if (_isSpecialToken(token)) {
+      return skipSpecialTokens ? '' : token;
+    }
+
+    final bytes = <int>[];
+    for (int i = 0; i < token.length; i++) {
+      final charUnit = token.codeUnitAt(i);
+      final byte = _byteDecoder[charUnit];
+      if (byte != null) {
+        bytes.add(byte);
+      } else if (charUnit < 256) {
+        bytes.add(charUnit);
+      }
+    }
+
+    return utf8.decode(bytes, allowMalformed: true);
+  }
+
+  /// Check if a token starts a new word (has the Ġ prefix indicating leading space).
+  /// The Ġ character (Unicode 288) represents a space in Whisper's BPE encoding.
+  bool tokenStartsNewWord(int tokenId) {
+    final token = _idToToken[tokenId];
+    if (token == null || _isSpecialToken(token)) return false;
+    // Ġ is Unicode 288, which represents a leading space in BPE
+    return token.isNotEmpty && token.codeUnitAt(0) == 288;
+  }
 }
