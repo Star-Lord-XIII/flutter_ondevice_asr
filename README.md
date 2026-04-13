@@ -130,12 +130,6 @@ Run with: `flutter test`
 
 Run with: `flutter test integration_test/`
 
-**Demo Applications** (`example/lib/`):
-
-This library provides demo apps to demonstrate library usage:
-- `app_nonstreaming.dart`: Record and transcribe complete audio files
-- `app_streaming.dart`: Real-time streaming transcription with live partial results
-
 ## Performance Measurement
 
 Measured on test audio (`assets/audio/jfk_asknot.wav`, 11 seconds) in non-streaming mode. Run `flutter run --release -d <DEVICE_ID> integration_test/whisper_test.dart` (from `example/` directory) to measure on your device.
