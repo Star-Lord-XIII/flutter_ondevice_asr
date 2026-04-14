@@ -269,8 +269,6 @@ def run_conversion(original_model_path: str, onnx_output_folder: str) -> list[st
     """
     default_onnx_folder = os.path.join(onnx_output_folder, 'default')
     default_int8_onnx_folder = os.path.join(onnx_output_folder, 'default_int8')
-    # TODO not needed anymore
-    # default_int8_onnx_folder_v2 = os.path.join(onnx_output_folder, 'default_int8_optimum')
     preprocessor_folder = os.path.join(onnx_output_folder, 'preprocessor')
 
     os.makedirs(default_onnx_folder, exist_ok=True)

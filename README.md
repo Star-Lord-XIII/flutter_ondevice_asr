@@ -1,6 +1,6 @@
 # Flutter On-Device ASR
 
-This is the Flutter library for on-device automatic speech recognition (ASR), used in the Project Euphonia Tool.
+This is a Flutter library for on-device automatic speech recognition (ASR), used in the Project Euphonia Tool.
 Please see [Project Euphonia](https://github.com/cdl-inclusion/ProjectEuphonia) for more information on the overall tool as well as other components.
 
 Library overview:
@@ -23,7 +23,6 @@ This library uses a **model-agnostic architecture** that separates transcription
   - Audio duration and timestamp
   - Optional word-level data with timing and confidence scores
   - Optional segment-level data and confidence scores
-  - Optional compression ratios for hallucination detection
 - `Word`: Word-level transcription with confidence score and timing information (start/end times)
 - `OnnxConfig`: Runtime configuration for ONNX models
 
@@ -39,7 +38,6 @@ This library uses a **model-agnostic architecture** that separates transcription
 **Assets:**
 - `assets/transcribers/whisper/models/`: Whisper ONNX model files (super_encoder, decoders, configs, vocab)
 - `assets/vad/silero_vad/`: Voice activity detection model
-- `assets/audio/`: Test audio samples
 
 ## Details on Whisper Implementation
 
@@ -62,7 +60,7 @@ All audio preprocessing (mel spectrogram extraction) is done within ONNX Runtime
 
 This requires ONNX Runtime 1.22+ (opset 17 support), which is why we use `onnxruntime_v2`.
 
-#### Super-Encoder
+#### Encoder with Preprocessing Stage
 
 The preprocessing stage (log-mel spectrogram conversion) is merged into the encoder, creating a "super-encoder" that processes raw audio directly in the ONNX graph. This is faster then running a seperate process to extract the log-mel spectrogram and then passing this into the encoder.
 
@@ -77,11 +75,11 @@ It also makes the code much simpler and abstracts preprocessing logic from the a
 
 ### Asset Generation
 
-Right now, all model specific asset files for the Whisper transcriber can be generated.
+All model specific asset files for the Whisper transcriber can be generated using the code in `conversion_tooling`.
 
 This will first download the multilingual Whisper tiny model from HuggingFace, convert to Onnx using Optimum, then create the preprocessor as seperate Onnx model and eventually merge that with the encoder into a "super encoder" onnx model. All files are then moved to the assets folder.
 
-We create both the f16 as well as the int8 qunatized version. For usage, unless quality impacts are too significant, it is highly recommended to use the int8 version.
+We create both an unquantized as well as the int8 qunatized version. For usage on phones, unless quality impacts are too significant, it is highly recommended to use the int8 version.
 
 ## Configuration
 
