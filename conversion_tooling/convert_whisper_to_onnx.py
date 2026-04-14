@@ -82,43 +82,6 @@ def quantize_onnx(onnx_input_dir, quantized_onnx_output_dir):
     print(f"Quantized {onnx_input_dir}.")
 
 
-# Note: this would technically be the most optimized version to quantize whisper models with special optimum
-# exporter quant settings. While the model gets smaller, it is not better or faster.
-# see details here: https://linear.app/cdli/issue/EUPHAPP-99/support-quantized-models-for-faster-on-device-inference
-# can improve later but for now keeping standard quantization
-def quantize_onnx_refined(onnx_input_dir, quantized_onnx_output_dir):
-    print(f"\n>>> Quantizing models from {onnx_input_dir}...")
-    
-    onnx_files = glob.glob(os.path.join(onnx_input_dir, "*.onnx"))
-    for model_path in onnx_files:
-        file_name = os.path.basename(model_path)
-        print(f">>> Processing {file_name}...")
-        quantizer = ORTQuantizer.from_pretrained(onnx_input_dir, file_name=file_name)
-
-    
-        # arm for android and apple silicon
-        # This config optimizes the math for the ARM NEON instruction set
-        dqconfig = AutoQuantizationConfig.arm64(is_static=False, per_channel=True)
-        dqconfig.operators_to_quantize = [
-            op for op in dqconfig.operators_to_quantize 
-            if "Conv" not in op
-        ]
-        
-        quantizer.quantize(
-            save_dir=quantized_onnx_output_dir,
-            quantization_config=dqconfig,
-            file_suffix="quantized" # This avoids overwriting issues
-        )
-
-    # Clean up filenames (Optimum adds a suffix, let's rename them back)
-    # This ensures they match the filenames expected by the generation config
-    for quant_file in glob.glob(os.path.join(quantized_onnx_output_dir, "*_quantized.onnx")):
-        new_name = quant_file.replace("_quantized.onnx", ".onnx")
-        os.rename(quant_file, new_name)
-
-    copy_config_files(onnx_input_dir, quantized_onnx_output_dir)
-
-
 def export_preprocessor_80(output_path="whisper_preprocessor_80.onnx"):
     """Export 80-band mel spectrogram preprocessor for Whisper.
 
@@ -278,11 +241,8 @@ def run_conversion(original_model_path: str, onnx_output_folder: str) -> list[st
     # Convert to ONNX
     convert_to_onnx(original_model_path, default_onnx_folder)
 
-    # Quantize both default and optimized versions
+    # Quantize to int8
     quantize_onnx(default_onnx_folder, default_int8_onnx_folder)
-
-    # # new quantize method
-    # quantize_onnx_refined(default_onnx_folder, default_int8_onnx_folder_v2)
 
     # Export preprocessor
     print("\n" + "=" * 70)
@@ -291,13 +251,16 @@ def run_conversion(original_model_path: str, onnx_output_folder: str) -> list[st
     preprocessor_path = os.path.join(preprocessor_folder, 'whisper_preprocessor_80.onnx')
     export_preprocessor_80(preprocessor_path)
 
-    # Create super encoders for each variant
+    # Create super encoders for each variant we want to support later
     print("\n" + "=" * 70)
     print("Creating super encoders")
     print("=" * 70)
 
     variants = [
-        ('default', default_onnx_folder),
+        # for now we only fully export the int8 variants and skip creating all the components like
+        # super encoder for unsupported variants (e.g., default full precision)
+        # skip:
+        # ('default', default_onnx_folder),
         ('default_int8', default_int8_onnx_folder),
     ]
 
@@ -345,7 +308,7 @@ def run_conversion(original_model_path: str, onnx_output_folder: str) -> list[st
 
     print(f"\n✓ Conversion complete! Models saved to {onnx_output_folder}")
 
-    return [default_onnx_folder, default_int8_onnx_folder]
+    return [variant_folder for _, variant_folder in variants]
 
 
 if __name__ == '__main__':
