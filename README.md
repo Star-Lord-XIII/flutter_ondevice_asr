@@ -203,10 +203,10 @@ Integration tests (`integration_test/`) don't require this setup as they build t
 
 ### Running performance tests
 
-Connect an android device, and run the integration test whisper_test.dart on it
+Connect an android device, and run the integration test whisper_non_streaming_performance_test.dart on it
 
 ```
-flutter drive --driver=test_driver/perf_driver.dart --target=integration_test/whisper_test.dart --profile --no-dds
+flutter drive --driver=test_driver/perf_driver.dart --target=integration_test/whisper_non_streaming_performance_test.dart --profile --no-dds
 ```
 
 this generates a trace file in example/build named `performance_trace.json`. You can open 
