@@ -90,8 +90,9 @@ void main() {
       final durations = <double>[];
       String? transcript;
 
-      for (int run = 0; run < 5; run++) {
-        print('\n--- Run ${run + 1}/5 ---');
+      final totalRuns = 5;
+      for (int run = 0; run < totalRuns; run++) {
+        print('\n--- Run ${run + 1}/$totalRuns ---');
         stepSw.reset();
         stepSw.start();
         final result =

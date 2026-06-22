@@ -45,7 +45,7 @@ class WhisperTranscriber implements Transcriber {
     required String languageCode,
     double tokensPerSecond = defaultTokensPerSecond,
   }) async {
-    dev.Timeline.startSync('load_whisper_model');
+    final loadModelTimelineTask = dev.TimelineTask()..start('load_whisper_model');
     _tokensPerSecond = tokensPerSecond;
     _modelPath = modelDirectory;
 
@@ -56,11 +56,12 @@ class WhisperTranscriber implements Transcriber {
       languageCode: languageCode,
     );
 
+    final superEncoderConfig = SuperEncoderConfig();
     final onnxConfig = TranscriberOnnxConfig();
 
     final superEncoderFutureResult = _loadSuperEncoder(
       modelPath: modelDirectory,
-      onnxConfig: onnxConfig,
+      onnxConfig: superEncoderConfig,
     );
     final decoderFutureResult = _loadDecoder(
       modelPath: modelDirectory,
@@ -84,7 +85,7 @@ class WhisperTranscriber implements Transcriber {
         errorMessage = '$errorMessage\n${result.error.toString()}';
       }
     }
-    dev.Timeline.finishSync();
+    loadModelTimelineTask.finish();
     if (errorMessage.isNotEmpty) {
       _logger.warning(errorMessage);
       return Result.error(Exception(errorMessage));
@@ -310,6 +311,7 @@ class WhisperTranscriber implements Transcriber {
     final maxNewTokens = maxTokens - tokens.length;
 
     for (int i = 0; i < maxNewTokens; ++i) {
+      dev.Timeline.startSync('decoder_run_$i');
       List<OrtValue?>? decoderOutputs;
       List<double> lastLogits;
 
@@ -428,6 +430,7 @@ class WhisperTranscriber implements Transcriber {
       );
 
       if (nextToken == eotToken) {
+        dev.Timeline.finishSync();
         break;
       }
       tokens.add(nextToken);
@@ -453,6 +456,7 @@ class WhisperTranscriber implements Transcriber {
           generatedTokenCount++;
         }
       }
+      dev.Timeline.finishSync();
     }
     runOptions.release();
     if (pastKeyValues != null) {
@@ -484,7 +488,6 @@ class WhisperTranscriber implements Transcriber {
       final avgLogProb = sumLogProbs / generatedTokenCount;
       segmentConfidence = exp(avgLogProb);
     }
-
     return Result.ok({
       'transcript': transcript,
       'confidences': confidences,
@@ -495,19 +498,24 @@ class WhisperTranscriber implements Transcriber {
 
   /// Load model methods.
   Future<Result<void>> _loadVocab({required String modelPath}) async {
+    dev.Timeline.startSync('load_vocab');
     final vocabPath = '$modelPath/vocab.json';
-    return _tokenizer.loadVocab(path: vocabPath);
+    final result = await _tokenizer.loadVocab(path: vocabPath);
+    dev.Timeline.finishSync();
+    return result;
   }
 
   Future<Result<void>> _loadSuperEncoder({
     required String modelPath,
     required OnnxConfig onnxConfig,
   }) async {
+    dev.Timeline.startSync('load_super_encoder');
     _logger.finer('Load super encoder');
     final encoderPath = '$modelPath/super_encoder.onnx';
     try {
       final encoderBytes = await Utils.loadBytes(encoderPath);
       superEncoderSession = onnxConfig.createSession(encoderBytes);
+      dev.Timeline.finishSync();
       return Result.ok(null);
     } catch (e) {
       return Result.error(
@@ -520,11 +528,13 @@ class WhisperTranscriber implements Transcriber {
     required String modelPath,
     required OnnxConfig onnxConfig,
   }) async {
+    dev.Timeline.startSync('load_decoder');
     _logger.finer('Load decoder');
     final decoderPath = '$modelPath/decoder_model.onnx';
     try {
       final decoderBytes = await Utils.loadBytes(decoderPath);
       decoderSession = onnxConfig.createSession(decoderBytes);
+      dev.Timeline.finishSync();
       return Result.ok(null);
     } catch (e) {
       return Result.error(
@@ -537,11 +547,13 @@ class WhisperTranscriber implements Transcriber {
     required String modelPath,
     required OnnxConfig onnxConfig,
   }) async {
+    dev.Timeline.startSync('load_decoder_with_past');
     _logger.finer('Load decoder with past');
     final decoderWithPastPath = '$modelPath/decoder_with_past_model.onnx';
     try {
       final decoderWithPastBytes = await Utils.loadBytes(decoderWithPastPath);
       decoderWithPastSession = onnxConfig.createSession(decoderWithPastBytes);
+      dev.Timeline.finishSync();
       return Result.ok(null);
     } catch (e) {
       return Result.error(
@@ -556,6 +568,7 @@ class WhisperTranscriber implements Transcriber {
     required String modelPath,
     required String languageCode,
   }) async {
+    dev.Timeline.startSync('load_control_token');
     final configPath = '$modelPath/generation_config.json';
     String configContent;
     try {
@@ -625,7 +638,7 @@ class WhisperTranscriber implements Transcriber {
       'Loaded token config: sot=$sotToken, eot=$eotToken, lang=$languageToken,'
       ' transcribe=$transcribeToken, notimestamps=$noTimestampsToken',
     );
-
+    dev.Timeline.finishSync();
     return Result.ok(null);
   }
 }
