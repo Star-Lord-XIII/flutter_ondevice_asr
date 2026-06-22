@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:developer' as dev;
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
@@ -44,6 +45,7 @@ class WhisperTranscriber implements Transcriber {
     required String languageCode,
     double tokensPerSecond = defaultTokensPerSecond,
   }) async {
+    dev.Timeline.startSync('load_whisper_model');
     _tokensPerSecond = tokensPerSecond;
     _modelPath = modelDirectory;
 
@@ -82,6 +84,7 @@ class WhisperTranscriber implements Transcriber {
         errorMessage = '$errorMessage\n${result.error.toString()}';
       }
     }
+    dev.Timeline.finishSync();
     if (errorMessage.isNotEmpty) {
       _logger.warning(errorMessage);
       return Result.error(Exception(errorMessage));
@@ -91,26 +94,30 @@ class WhisperTranscriber implements Transcriber {
 
   @override
   Future<Result<TranscriptionResult>> transcribe(
-      Float32List audio, {
-        bool segmentEnd = true,
-        bool getWordDetails = false,
-        bool getSegmentDetails = false,
-        int? maxOutputTokens,
-      }) async {
+    Float32List audio, {
+    bool segmentEnd = true,
+    bool getWordDetails = false,
+    bool getSegmentDetails = false,
+    int? maxOutputTokens,
+  }) async {
+    dev.Timeline.startSync('run_super_encoder');
     final encoded = await _runSuperEncoder(audio);
+    dev.Timeline.finishSync();
     final audioFeaturesTensor = encoded?[1] as OrtValueTensor;
 
     final audioDuration = audio.length / 16000.0;
     final effectiveMaxTokens =
         maxOutputTokens ??
-            (audioDuration * _tokensPerSecond).ceil().clamp(10, 224);
+        (audioDuration * _tokensPerSecond).ceil().clamp(10, 224);
 
+    dev.Timeline.startSync('run_decoder');
     final decoderResultResult = await _runDecoder(
       audioFeaturesTensor,
       effectiveMaxTokens,
       computeTokenConfidence: getWordDetails,
       computeSegmentConfidence: getSegmentDetails,
     );
+    dev.Timeline.finishSync();
     audioFeaturesTensor.release();
 
     Map<String, dynamic> decoderResult = {};
@@ -161,12 +168,12 @@ class WhisperTranscriber implements Transcriber {
 
   @override
   Future<Result<TranscriptionResult>> transcribeFile(
-      String path, {
-        bool segmentEnd = true,
-        bool getWordDetails = false,
-        bool getSegmentDetails = false,
-        int? maxOutputTokens,
-      }) async {
+    String path, {
+    bool segmentEnd = true,
+    bool getWordDetails = false,
+    bool getSegmentDetails = false,
+    int? maxOutputTokens,
+  }) async {
     final audio = await compute(Audio.instance.loadAudio, path);
     return transcribe(
       audio,
@@ -186,7 +193,10 @@ class WhisperTranscriber implements Transcriber {
 
   /// Map tokens to words with proper confidence aggregation.
   /// Uses minimum confidence across all tokens that form a word.
-  List<Word> _mapTokensToWordsWithConfidences(List<int> tokens, List<double> confidences) {
+  List<Word> _mapTokensToWordsWithConfidences(
+    List<int> tokens,
+    List<double> confidences,
+  ) {
     final words = <Word>[];
     String currentWordText = '';
     final currentWordConfidences = <double>[];
@@ -202,14 +212,16 @@ class WhisperTranscriber implements Transcriber {
 
       if (startsNewWord && currentWordText.trim().isNotEmpty) {
         // Finish previous word - use minimum confidence
-        words.add(Word(
-          word: currentWordText.trim(),
-          confidence: currentWordConfidences.isNotEmpty
-              ? currentWordConfidences.reduce(min)
-              : -1.0,
-          start: -1.0,
-          end: -1.0,
-        ));
+        words.add(
+          Word(
+            word: currentWordText.trim(),
+            confidence: currentWordConfidences.isNotEmpty
+                ? currentWordConfidences.reduce(min)
+                : -1.0,
+            start: -1.0,
+            end: -1.0,
+          ),
+        );
         currentWordText = '';
         currentWordConfidences.clear();
       }
@@ -222,14 +234,16 @@ class WhisperTranscriber implements Transcriber {
 
     // Don't forget the last word
     if (currentWordText.trim().isNotEmpty) {
-      words.add(Word(
-        word: currentWordText.trim(),
-        confidence: currentWordConfidences.isNotEmpty
-            ? currentWordConfidences.reduce(min)
-            : -1.0,
-        start: -1.0,
-        end: -1.0,
-      ));
+      words.add(
+        Word(
+          word: currentWordText.trim(),
+          confidence: currentWordConfidences.isNotEmpty
+              ? currentWordConfidences.reduce(min)
+              : -1.0,
+          start: -1.0,
+          end: -1.0,
+        ),
+      );
     }
 
     return words;
@@ -262,11 +276,11 @@ class WhisperTranscriber implements Transcriber {
   }
 
   Future<Result<Map<String, dynamic>>> _runDecoder(
-      OrtValueTensor audioFeaturesTensor,
-      int maxTokens, {
-        bool computeTokenConfidence = false,
-        bool computeSegmentConfidence = false,
-      }) async {
+    OrtValueTensor audioFeaturesTensor,
+    int maxTokens, {
+    bool computeTokenConfidence = false,
+    bool computeSegmentConfidence = false,
+  }) async {
     final List<int> tokens = [
       sotToken,
       languageToken!,
@@ -531,7 +545,9 @@ class WhisperTranscriber implements Transcriber {
       return Result.ok(null);
     } catch (e) {
       return Result.error(
-        Exception('Failed to load decoder_with_past_model.onnx from <$modelPath>: $e'),
+        Exception(
+          'Failed to load decoder_with_past_model.onnx from <$modelPath>: $e',
+        ),
       );
     }
   }
@@ -546,7 +562,9 @@ class WhisperTranscriber implements Transcriber {
       configContent = await Utils.loadString(configPath);
     } catch (e) {
       return Result.error(
-        Exception('Failed to load generation_config.json from <$modelPath>: $e'),
+        Exception(
+          'Failed to load generation_config.json from <$modelPath>: $e',
+        ),
       );
     }
     final config = jsonDecode(configContent) as Map<String, dynamic>;
@@ -595,8 +613,8 @@ class WhisperTranscriber implements Transcriber {
           return Result.error(
             Exception(
               'Language "$languageCode" not found in model configuration. '
-                  'This model may not support this language. '
-                  'Available languages: ${langToId.keys.map((k) => k.replaceAll(RegExp(r'[<|>]'), '')).join(", ")}',
+              'This model may not support this language. '
+              'Available languages: ${langToId.keys.map((k) => k.replaceAll(RegExp(r'[<|>]'), '')).join(", ")}',
             ),
           );
         }
@@ -605,7 +623,7 @@ class WhisperTranscriber implements Transcriber {
 
     _logger.finer(
       'Loaded token config: sot=$sotToken, eot=$eotToken, lang=$languageToken,'
-          ' transcribe=$transcribeToken, notimestamps=$noTimestampsToken',
+      ' transcribe=$transcribeToken, notimestamps=$noTimestampsToken',
     );
 
     return Result.ok(null);

@@ -201,6 +201,18 @@ This level of verbosity needs to be avoided in a production setting!
 
 Integration tests (`integration_test/`) don't require this setup as they build the full app with native libraries included automatically.
 
+### Running performance tests
+
+Connect an android device, and run the integration test whisper_test.dart on it
+
+```
+flutter drive --driver=test_driver/perf_driver.dart --target=integration_test/whisper_test.dart --profile --no-dds
+```
+
+this generates a trace file in example/build named `performance_trace.json`. You can open 
+this file in chrome://tracing.
+
+
 ### macOS Setup
 
 1. **Install ONNX Runtime via Homebrew:**

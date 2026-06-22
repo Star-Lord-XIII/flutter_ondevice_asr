@@ -10,13 +10,15 @@ import 'package:flutter_ondevice_asr/flutter_ondevice_asr.dart';
 import 'package:logging/logging.dart';
 import 'package:path_provider/path_provider.dart';
 
-
 void main() {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  const testAudioFile = 'packages/flutter_ondevice_asr/assets/audio/jfk_asknot.wav';
-  const expectedTranscript = 'And so my fellow Americans ask not what your country can do for you, ask what you can do for your country.';
-  const modelDirectory = 'assets/transcribers/whisper/models/whisper_tiny/default_int8';
+  const testAudioFile =
+      'packages/flutter_ondevice_asr/assets/audio/jfk_asknot.wav';
+  const expectedTranscript =
+      'And so my fellow Americans ask not what your country can do for you, ask what you can do for your country.';
+  const modelDirectory =
+      'assets/transcribers/whisper/models/whisper_tiny/default_int8';
   const String language = 'en';
 
   // Alternative test audio:
@@ -34,77 +36,94 @@ void main() {
   });
 
   testWidgets('transcribe test audio', (WidgetTester tester) async {
-    // 1. Initialize stopwatch to measure durations
-    final totalSw = Stopwatch()..start();
-    final stepSw = Stopwatch();
+    await binding.traceAction(() async {
+      // 1. Initialize stopwatch to measure durations
+      final totalSw = Stopwatch()..start();
+      final stepSw = Stopwatch();
 
-    void logStep(String message) {
-      print('[${DateTime.now()}] $message (${stepSw.elapsedMilliseconds}ms)');
-      stepSw.reset();
+      void logStep(String message) {
+        print('[${DateTime.now()}] $message (${stepSw.elapsedMilliseconds}ms)');
+        stepSw.reset();
+        stepSw.start();
+      }
+
+      print('[${DateTime.now()}] START TEST');
       stepSw.start();
-    }
 
-    print('[${DateTime.now()}] START TEST');
-    stepSw.start();
+      final whisper = Transcriber.getInstance(TranscriberType.whisper);
 
-    final whisper = Transcriber.getInstance(TranscriberType.whisper);
+      // 2. Load models
+      final loadModelResult = await whisper.loadModel(
+        modelDirectory: modelDirectory,
+        languageCode: language,
+      );
+      expect(loadModelResult is Ok, true);
+      logStep('Models loaded');
 
-    // 2. Load models
-    final loadModelResult = await whisper.loadModel(modelDirectory: modelDirectory, languageCode: language);
-    expect(loadModelResult is Ok, true);
-    logStep('Models loaded');
+      // 3. Load test audio
+      final audioAsset = await rootBundle.load(testAudioFile);
+      final tempDir = await getTemporaryDirectory();
 
-    // 3. Load test audio
-    final audioAsset = await rootBundle.load(testAudioFile);
-    final tempDir = await getTemporaryDirectory();
+      // Ensure the temporary directory exists
+      if (!await tempDir.exists()) {
+        await tempDir.create(recursive: true);
+      }
 
-    // Ensure the temporary directory exists
-    if (!await tempDir.exists()) {
-      await tempDir.create(recursive: true);
-    }
+      final tempAudioFile = File('${tempDir.path}/test_audio.wav');
+      await tempAudioFile.writeAsBytes(audioAsset.buffer.asUint8List());
 
-    final tempAudioFile = File('${tempDir.path}/test_audio.wav');
-    await tempAudioFile.writeAsBytes(audioAsset.buffer.asUint8List());
+      final testAudioFloat32List = await Audio.instance.loadAudio(
+        tempAudioFile.path,
+      );
+      logStep('Audio file prepared and loaded');
 
-    final testAudioFloat32List = await Audio.instance.loadAudio(tempAudioFile.path);
-    logStep('Audio file prepared and loaded');
+      // Audio duration
+      final audioDurationSec = testAudioFloat32List.length / 16000.0;
+      print(
+        'Audio duration: ${audioDurationSec.toStringAsFixed(2)} seconds (${testAudioFloat32List.length} samples @ 16kHz)',
+      );
 
-    // Audio duration
-    final audioDurationSec = testAudioFloat32List.length / 16000.0;
-    print('Audio duration: ${audioDurationSec.toStringAsFixed(2)} seconds (${testAudioFloat32List.length} samples @ 16kHz)');
+      // 4. Transcribe (5 runs for statistics)
+      print(
+        '\n=== Running transcription 5 times for performance statistics ===',
+      );
+      final durations = <double>[];
+      String? transcript;
 
-    // 4. Transcribe (5 runs for statistics)
-    print('\n=== Running transcription 5 times for performance statistics ===');
-    final durations = <double>[];
-    String? transcript;
+      for (int run = 0; run < 5; run++) {
+        print('\n--- Run ${run + 1}/5 ---');
+        stepSw.reset();
+        stepSw.start();
+        final result =
+            await whisper.transcribe(testAudioFloat32List)
+                as Ok<TranscriptionResult>;
+        final durationMs = stepSw.elapsedMilliseconds.toDouble();
+        durations.add(durationMs);
+        print('Duration: ${durationMs.toStringAsFixed(1)} ms');
+        if (run == 0) transcript = result.value.text;
+      }
 
-    for (int run = 0; run < 5; run++) {
-      print('\n--- Run ${run + 1}/5 ---');
-      stepSw.reset();
-      stepSw.start();
-      final result = await whisper.transcribe(testAudioFloat32List) as Ok<TranscriptionResult>;
-      final durationMs = stepSw.elapsedMilliseconds.toDouble();
-      durations.add(durationMs);
-      print('Duration: ${durationMs.toStringAsFixed(1)} ms');
-      if (run == 0) transcript = result.value.text;
-    }
+      // Calculate average and standard deviation
+      final avg = durations.reduce((a, b) => a + b) / durations.length;
+      final variance =
+          durations.map((d) => pow(d - avg, 2)).reduce((a, b) => a + b) /
+          durations.length;
+      final std = sqrt(variance);
 
-    // Calculate average and standard deviation
-    final avg = durations.reduce((a, b) => a + b) / durations.length;
-    final variance = durations.map((d) => pow(d - avg, 2)).reduce((a, b) => a + b) / durations.length;
-    final std = sqrt(variance);
+      print('\n=== Performance Statistics ===');
+      print('Average: ${avg.toStringAsFixed(1)} ms');
+      print('Std Dev: ${std.toStringAsFixed(1)} ms');
+      print('Min: ${durations.reduce(min).toStringAsFixed(1)} ms');
+      print('Max: ${durations.reduce(max).toStringAsFixed(1)} ms');
+      print('\nTranscript: $transcript');
 
-    print('\n=== Performance Statistics ===');
-    print('Average: ${avg.toStringAsFixed(1)} ms');
-    print('Std Dev: ${std.toStringAsFixed(1)} ms');
-    print('Min: ${durations.reduce(min).toStringAsFixed(1)} ms');
-    print('Max: ${durations.reduce(max).toStringAsFixed(1)} ms');
-    print('\nTranscript: $transcript');
+      // 5. Clean up & Verify
+      await tempAudioFile.delete();
+      expect(transcript, expectedTranscript);
 
-    // 5. Clean up & Verify
-    await tempAudioFile.delete();
-    expect(transcript, expectedTranscript);
-
-    print('[${DateTime.now()}] TEST PASSED - Total duration: ${totalSw.elapsed.inSeconds}s');
+      print(
+        '[${DateTime.now()}] TEST PASSED - Total duration: ${totalSw.elapsed.inSeconds}s',
+      );
+    }, streams: ["Dart"]);
   });
 }
