@@ -11,7 +11,7 @@ import 'package:logging/logging.dart';
 import 'package:path_provider/path_provider.dart';
 
 void main() {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   const testAudioFile =
       'packages/flutter_ondevice_asr/assets/audio/jfk_asknot.wav';
@@ -36,6 +36,7 @@ void main() {
   });
 
   testWidgets('transcribe test audio', (WidgetTester tester) async {
+    await binding.traceAction(() async {
       // 1. Initialize stopwatch to measure durations
       final totalSw = Stopwatch()..start();
       final stepSw = Stopwatch();
@@ -89,8 +90,9 @@ void main() {
       final durations = <double>[];
       String? transcript;
 
-      for (int run = 0; run < 5; run++) {
-        print('\n--- Run ${run + 1}/5 ---');
+      final totalRuns = 5;
+      for (int run = 0; run < totalRuns; run++) {
+        print('\n--- Run ${run + 1}/$totalRuns ---');
         stepSw.reset();
         stepSw.start();
         final result =
@@ -123,5 +125,6 @@ void main() {
       print(
         '[${DateTime.now()}] TEST PASSED - Total duration: ${totalSw.elapsed.inSeconds}s',
       );
+    }, streams: ["Dart"]);
   });
 }

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 import 'package:flutter/services.dart';
@@ -11,7 +12,7 @@ import 'package:logging/logging.dart';
 import 'package:path_provider/path_provider.dart';
 
 void main() {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   const testAudioFile =
       'packages/flutter_ondevice_asr/assets/audio/jfk_asknot.wav';
@@ -21,13 +22,6 @@ void main() {
       'assets/transcribers/whisper/models/whisper_tiny/default_int8';
   const String language = 'en';
 
-  // Alternative test audio:
-  // const testAudioFile = 'packages/flutter_ondevice_asr/assets/audio/crisp_autumn.wav';
-  // const expectedTranscript = 'crisp autumn leaves crunch underfoot';
-  // Alternative: use external model paths (not bundled):
-  // const modelDirectory = '/tmp/onnx_tiny/default';  // multilingual
-  // const modelDirectory = '/tmp/onnx_tiny_en/default';  // English-only
-
   setUp(() {
     Logger.root.level = Level.ALL; // defaults to Level.INFO
     Logger.root.onRecord.listen((record) {
@@ -36,6 +30,7 @@ void main() {
   });
 
   testWidgets('transcribe test audio', (WidgetTester tester) async {
+    final timeline = await binding.traceTimeline(() async {
       // 1. Initialize stopwatch to measure durations
       final totalSw = Stopwatch()..start();
       final stepSw = Stopwatch();
@@ -89,13 +84,14 @@ void main() {
       final durations = <double>[];
       String? transcript;
 
-      for (int run = 0; run < 5; run++) {
-        print('\n--- Run ${run + 1}/5 ---');
+      final totalRuns = 5;
+      for (int run = 0; run < totalRuns; run++) {
+        print('\n--- Run ${run + 1}/$totalRuns ---');
         stepSw.reset();
         stepSw.start();
         final result =
-            await whisper.transcribe(testAudioFloat32List)
-                as Ok<TranscriptionResult>;
+        await whisper.transcribe(testAudioFloat32List)
+        as Ok<TranscriptionResult>;
         final durationMs = stepSw.elapsedMilliseconds.toDouble();
         durations.add(durationMs);
         print('Duration: ${durationMs.toStringAsFixed(1)} ms');
@@ -106,7 +102,7 @@ void main() {
       final avg = durations.reduce((a, b) => a + b) / durations.length;
       final variance =
           durations.map((d) => pow(d - avg, 2)).reduce((a, b) => a + b) /
-          durations.length;
+              durations.length;
       final std = sqrt(variance);
 
       print('\n=== Performance Statistics ===');
@@ -123,5 +119,10 @@ void main() {
       print(
         '[${DateTime.now()}] TEST PASSED - Total duration: ${totalSw.elapsed.inSeconds}s',
       );
+    }, streams: ["Dart"]);
+
+    final String traceData = const JsonEncoder.withIndent('  ').convert(timeline.toJson());
+    final file = File('/sdcard/Documents/performance_trace.json');
+    await file.writeAsString(traceData);
   });
 }

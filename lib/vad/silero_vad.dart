@@ -8,7 +8,8 @@ import '../util/utils.dart';
 /// ONNX wrapper for Silero VAD model
 class SileroVAD {
   static const String _vadAssetPath = 'assets/vad/silero_vad/silero_vad.onnx';
-  final String sileroVadModelPath = 'packages/${Utils.packageName}/$_vadAssetPath';
+  final String sileroVadModelPath =
+      'packages/${Utils.packageName}/$_vadAssetPath';
   final bool verbose;
 
   late final OrtSession _session;
@@ -36,9 +37,7 @@ class SileroVAD {
   ///
   /// Parameters:
   /// - [verbose]: Enable verbose logging for debugging (default: false)
-  SileroVAD({
-    this.verbose = false,
-  });
+  SileroVAD({this.verbose = false});
 
   /// Create default ONNX configuration for VAD
   /// VAD is lightweight, so we use minimal threading
@@ -98,12 +97,16 @@ class SileroVAD {
 
     // Validate sample rate
     if (sr != 16000 && sr != 8000) {
-      throw ArgumentError('Unsupported sampling rate: $sr. Supported: 8000, 16000');
+      throw ArgumentError(
+        'Unsupported sampling rate: $sr. Supported: 8000, 16000',
+      );
     }
 
     // Expected chunk sizes
     if (x.length != requiredChunkSize) {
-      throw ArgumentError('Expected $requiredChunkSize samples for ${sr}Hz, got ${x.length}');
+      throw ArgumentError(
+        'Expected $requiredChunkSize samples for ${sr}Hz, got ${x.length}',
+      );
     }
 
     final batchSize = 1;
@@ -128,10 +131,7 @@ class SileroVAD {
       [1, inputLength],
     );
 
-    final srTensor = OrtValueTensor.createTensorWithDataList(
-      _srBuffer,
-      [1],
-    );
+    final srTensor = OrtValueTensor.createTensorWithDataList(_srBuffer, [1]);
 
     try {
       Map<String, OrtValue> inputs;
@@ -140,24 +140,18 @@ class SileroVAD {
       // Build inputs based on model's expected input names
       if (_inputNames.contains('state')) {
         // Combined state version - use Float32List directly
-        final stateTensor = OrtValueTensor.createTensorWithDataList(
-          _state!,
-          [2, 1, 128],
-        );
+        final stateTensor = OrtValueTensor.createTensorWithDataList(_state!, [
+          2,
+          1,
+          128,
+        ]);
 
         try {
-          inputs = {
-            'input': inputTensor,
-            'state': stateTensor,
-            'sr': srTensor,
-          };
+          inputs = {'input': inputTensor, 'state': stateTensor, 'sr': srTensor};
 
           final runOptions = OrtRunOptions();
           try {
-            outputs = _session.run(
-              runOptions,
-              inputs,
-            );
+            outputs = _session.run(runOptions, inputs);
           } finally {
             runOptions.release();
           }
@@ -186,15 +180,17 @@ class SileroVAD {
         }
       } else {
         // Separate h/c version - use Float32List directly
-        final hTensor = OrtValueTensor.createTensorWithDataList(
-          _h!,
-          [2, 1, 64],
-        );
+        final hTensor = OrtValueTensor.createTensorWithDataList(_h!, [
+          2,
+          1,
+          64,
+        ]);
 
-        final cTensor = OrtValueTensor.createTensorWithDataList(
-          _c!,
-          [2, 1, 64],
-        );
+        final cTensor = OrtValueTensor.createTensorWithDataList(_c!, [
+          2,
+          1,
+          64,
+        ]);
 
         try {
           inputs = {
@@ -206,10 +202,7 @@ class SileroVAD {
 
           final runOptions = OrtRunOptions();
           try {
-            outputs = _session.run(
-              runOptions,
-              inputs,
-            );
+            outputs = _session.run(runOptions, inputs);
           } finally {
             runOptions.release();
           }
@@ -272,7 +265,12 @@ class SileroVAD {
       }
 
       // Update context in-place with last contextSize samples from input buffer
-      _context.setRange(0, contextSize, _inputDataBuffer, _inputDataBuffer.length - contextSize);
+      _context.setRange(
+        0,
+        contextSize,
+        _inputDataBuffer,
+        _inputDataBuffer.length - contextSize,
+      );
 
       _lastSr = sr;
 
@@ -351,7 +349,9 @@ class SileroVADIterator {
     // Debug: Log probability periodically
     _callCount++;
     if (verbose && _callCount % 20 == 0) {
-      debugPrint('[SileroVAD] Prob: ${speechProb.toStringAsFixed(3)}, Triggered: $_triggered, TempEnd: $_tempEnd');
+      debugPrint(
+        '[SileroVAD] Prob: ${speechProb.toStringAsFixed(3)}, Triggered: $_triggered, TempEnd: $_tempEnd',
+      );
     }
 
     if (speechProb >= threshold && _tempEnd != 0) {
@@ -365,7 +365,9 @@ class SileroVADIterator {
       _currentSample += windowSizeSamples;
 
       if (verbose) {
-        debugPrint('[SileroVAD] Speech started (prob: ${speechProb.toStringAsFixed(3)})');
+        debugPrint(
+          '[SileroVAD] Speech started (prob: ${speechProb.toStringAsFixed(3)})',
+        );
       }
 
       return 'start';
@@ -386,7 +388,9 @@ class SileroVADIterator {
         _currentSample += windowSizeSamples;
 
         if (verbose) {
-          debugPrint('[SileroVAD] Speech ended (prob: ${speechProb.toStringAsFixed(3)})');
+          debugPrint(
+            '[SileroVAD] Speech ended (prob: ${speechProb.toStringAsFixed(3)})',
+          );
         }
 
         return 'end';

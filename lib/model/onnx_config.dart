@@ -110,6 +110,15 @@ class TranscriberOnnxConfig extends OnnxConfig {
   });
 }
 
+class SuperEncoderConfig extends OnnxConfig {
+  const SuperEncoderConfig({
+    super.intraOpNumThreads = 8,
+    super.interOpNumThreads = 1,
+    super.graphOptimizationLevel = GraphOptimizationLevel.ortEnableAll,
+    super.enableXnnpack = true,
+  });
+}
+
 /// Specialized ONNX configuration for VAD (Voice Activity Detection) models.
 ///
 /// VAD models are lightweight and fast, so they use minimal resources.
