@@ -212,6 +212,22 @@ flutter drive --driver=test_driver/perf_driver.dart --target=integration_test/wh
 this generates a trace file in example/build named `performance_trace.json`. You can open 
 this file in chrome://tracing.
 
+### Running performance tests on Firebase Test lab
+
+```
+cd android
+./gradlew app:assembleProfile -Ptarget="integration_test/whisper_non_streaming_firebase_performance_test.dart"
+./gradlew app:assembleAndroidTest
+
+gcloud firebase test android run --type instrumentation \
+    --app ../build/app/outputs/apk/profile/app-profile.apk \
+    --test ../build/app/outputs/apk/androidTest/debug/app-debug-androidTest.apk \
+    --device model=gta9pwifi,version=34,locale=en,orientation=portrait \
+    --device model=akita,version=34,locale=en,orientation=portrait \
+    --timeout 15m \
+    --directories-to-pull /sdcard/Documents
+```
+
 
 ### macOS Setup
 
