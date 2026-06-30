@@ -54,7 +54,7 @@ jobs:
         uses: 'google-github-actions/setup-gcloud@v3'
 
       - name: 'Set Google Project underlying Firebase Project'
-        run: gcloud config set ${{ secrets.PROJECT_ID }}
+        run: gcloud config set project ${{ secrets.PROJECT_ID }}
 
       - name: 'Download and setup whisper tiny model in project asset'
         run: |
