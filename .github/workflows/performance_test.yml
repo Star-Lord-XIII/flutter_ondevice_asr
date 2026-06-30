@@ -72,7 +72,7 @@ jobs:
           CI: true
         run: |
           cd example/android
-          gradle wrapper
+          gradle wrapper --gradle-version 9.5
           ./gradlew app:assembleProfile -Ptarget="integration_test/whisper_non_streaming_firebase_performance_test.dart"
           ./gradlew app:assembleAndroidTest
           gcloud firebase test android run --type instrumentation \
