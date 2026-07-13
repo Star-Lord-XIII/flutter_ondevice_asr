@@ -56,12 +56,11 @@ class WhisperTranscriber implements Transcriber {
       languageCode: languageCode,
     );
 
-    final superEncoderConfig = SuperEncoderConfig();
     final onnxConfig = TranscriberOnnxConfig();
 
     final superEncoderFutureResult = _loadSuperEncoder(
       modelPath: modelDirectory,
-      onnxConfig: superEncoderConfig,
+      onnxConfig: onnxConfig,
     );
     final decoderFutureResult = _loadDecoder(
       modelPath: modelDirectory,

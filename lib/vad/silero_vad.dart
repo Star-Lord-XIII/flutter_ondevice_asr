@@ -140,11 +140,10 @@ class SileroVAD {
       // Build inputs based on model's expected input names
       if (_inputNames.contains('state')) {
         // Combined state version - use Float32List directly
-        final stateTensor = OrtValueTensor.createTensorWithDataList(_state!, [
-          2,
-          1,
-          128,
-        ]);
+        final stateTensor = OrtValueTensor.createTensorWithDataList(
+          _state!,
+          [2, 1, 128],
+        );
 
         try {
           inputs = {'input': inputTensor, 'state': stateTensor, 'sr': srTensor};
@@ -180,17 +179,15 @@ class SileroVAD {
         }
       } else {
         // Separate h/c version - use Float32List directly
-        final hTensor = OrtValueTensor.createTensorWithDataList(_h!, [
-          2,
-          1,
-          64,
-        ]);
+        final hTensor = OrtValueTensor.createTensorWithDataList(
+          _h!,
+          [2, 1, 64],
+        );
 
-        final cTensor = OrtValueTensor.createTensorWithDataList(_c!, [
-          2,
-          1,
-          64,
-        ]);
+        final cTensor = OrtValueTensor.createTensorWithDataList(
+          _c!,
+          [2, 1, 64],
+        );
 
         try {
           inputs = {
