@@ -206,7 +206,7 @@ Integration tests (`integration_test/`) don't require this setup as they build t
 Connect an android device, and run the integration test whisper_non_streaming_performance_test.dart on it
 
 ```
-flutter drive --driver=test_driver/perf_driver.dart --target=integration_test/whisper_non_streaming_performance_test.dart --profile --no-dds
+flutter drive --driver=test_driver/perf_driver.dart --target=integration_test/whisper_test.dart --profile --no-dds --dart-define=PERFORMANCE=true
 ```
 
 this generates a trace file in example/build named `performance_trace.json`. You can open 
@@ -215,8 +215,8 @@ this file in chrome://tracing.
 ### Running performance tests on Firebase Test lab
 
 ```
-cd android
-./gradlew app:assembleProfile -Ptarget="integration_test/whisper_non_streaming_firebase_performance_test.dart"
+cd example/android
+./gradlew app:assembleProfile -Ptarget="integration_test/whisper_test.dart" -Pdart-defines=RklSRUJBU0U9dHJ1ZQ==
 ./gradlew app:assembleAndroidTest
 
 gcloud firebase test android run --type instrumentation \

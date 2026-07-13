@@ -56,12 +56,11 @@ class WhisperTranscriber implements Transcriber {
       languageCode: languageCode,
     );
 
-    final superEncoderConfig = SuperEncoderConfig();
     final onnxConfig = TranscriberOnnxConfig();
 
     final superEncoderFutureResult = _loadSuperEncoder(
       modelPath: modelDirectory,
-      onnxConfig: superEncoderConfig,
+      onnxConfig: onnxConfig,
     );
     final decoderFutureResult = _loadDecoder(
       modelPath: modelDirectory,
@@ -568,7 +567,7 @@ class WhisperTranscriber implements Transcriber {
     required String modelPath,
     required String languageCode,
   }) async {
-    dev.Timeline.startSync('load_control_token');
+    final loadControlTokenTask = dev.TimelineTask()..start('load_control_token');
     final configPath = '$modelPath/generation_config.json';
     String configContent;
     try {
@@ -638,7 +637,7 @@ class WhisperTranscriber implements Transcriber {
       'Loaded token config: sot=$sotToken, eot=$eotToken, lang=$languageToken,'
       ' transcribe=$transcribeToken, notimestamps=$noTimestampsToken',
     );
-    dev.Timeline.finishSync();
+    loadControlTokenTask.finish();
     return Result.ok(null);
   }
 }
